@@ -130,14 +130,15 @@ def draw_tail(c, base, mid, tip, spec, color=None):
 def draw_head(c, centre, spec, eye_open=True):
     hx, hy = centre
     c.ellipse(hx, hy, 4.4, 3.9, spec["body"])
-    # Ears: two small triangles, pink inside.
-    for ex in (-3, 2):
-        c.dot(hx + ex, hy - 6, spec["body"])
-        c.dot(hx + ex, hy - 5, spec["body"], 1)
-        c.dot(hx + ex + 1, hy - 5, spec["body"])
-        c.dot(hx + ex - 1, hy - 4, spec["body"])
+    # Ears: two symmetric triangles standing on the skull, pink inside. One
+    # pixel at the tip, three at the base, and a further row that runs into
+    # the skull so the ear never floats off the side of the head.
+    for ex in (-2, 2):
+        c.dot(hx + ex, hy - 5, spec["body"])
+        for row in (4, 3):
+            for dx in (-1, 0, 1):
+                c.dot(hx + ex + dx, hy - row, spec["body"])
         c.dot(hx + ex, hy - 4, PINK)
-        c.dot(hx + ex + 1, hy - 4, spec["body"])
     # Muzzle and nose.
     c.dot(hx + 3, hy + 1, spec["light"], 2)
     c.dot(hx + 4, hy + 1, PINK)
@@ -258,7 +259,7 @@ def sleep_frame(spec, i):
     draw_tail(c, (4, 19), (7, 22), (20, 21), spec, color=spec["dark"])
     c.dot(21, 20, spec["light"], 2)           # front paw tucked under the chin
     if i in (4, 5):                           # ear flick
-        c.dot(22, 11, spec["body"])
+        c.dot(23, 12, spec["body"])
     return c.img
 
 
@@ -321,13 +322,16 @@ def draw_raccoon_head(c, centre, spec, eye_open=True):
     # Small rounded ears, solid, with a pale inner pixel. Drawn first so the
     # skull overlaps them. A pale rim round a dark centre read as hollow loops
     # against the dark HUD.
-    for ex in (-3, 1):
-        c.dot(hx + ex, hy - 5, spec["body"])
-        c.dot(hx + ex + 1, hy - 5, spec["body"])
-        c.dot(hx + ex - 1, hy - 4, spec["body"])
-        c.dot(hx + ex, hy - 4, spec["light"])
-        c.dot(hx + ex + 1, hy - 4, spec["body"])
-        c.dot(hx + ex + 2, hy - 4, spec["body"])
+    for ex in (-3, 2):
+        # A 2x2 block with one pale inner pixel: low and round where the
+        # cat's are pointed. Mirrored either side of the crown, with a row
+        # underneath joining each to the skull.
+        for row in (5, 4):
+            c.dot(hx + ex, hy - row, spec["body"])
+            c.dot(hx + ex + 1, hy - row, spec["body"])
+        c.dot(hx + (ex + 1 if ex < 0 else ex), hy - 4, spec["light"])
+    for dx in range(-3, 4):
+        c.dot(hx + dx, hy - 3, spec["body"])
     c.ellipse(hx, hy, 4.4, 3.9, spec["body"])
     # Pale brow over the mask, pale muzzle under it.
     for x in range(0, 4):
