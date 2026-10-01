@@ -14,6 +14,21 @@ preferences. The swap applies immediately — no logout needed.
 ![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-46-4A86CF)
 ![Platform](https://img.shields.io/badge/Platform-Linux-FCC624)
 
+## Install
+
+Requires GNOME Shell 46.
+
+```bash
+git clone https://github.com/Rabbit025879/system-patrol.git ~/.local/share/gnome-shell/extensions/system-patrol@rabbit025879
+```
+
+Restart the shell so it finds the new extension — `Alt`+`F2`, then `r`, on
+X11; log out and back in on Wayland — and then enable it:
+
+```bash
+gnome-extensions enable system-patrol@rabbit025879
+```
+
 ## What it shows
 
 | Section | Source | Notes |
