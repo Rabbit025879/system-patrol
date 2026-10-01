@@ -37,11 +37,11 @@ PUPIL = (36, 40, 48, 255)
 PINK = (236, 150, 160, 255)
 
 MASCOTS = {
-    # Grey-blue tabby. Mid-tones throughout so it reads on the dark HUD.
+    # Orange tabby: ginger coat, darker ginger stripes, cream belly and paws.
     "cat": {
-        "body": (138, 152, 170, 255),
-        "dark": (88, 99, 116, 255),
-        "light": (196, 205, 217, 255),
+        "body": (236, 152, 72, 255),
+        "dark": (186, 100, 38, 255),
+        "light": (252, 228, 192, 255),
         "tail_size": 2,
         "tail_rings": False,
         "mask": False,
