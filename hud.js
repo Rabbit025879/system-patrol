@@ -21,14 +21,17 @@ const COLOR_MUTED = '#7f8694';
 const COLOR_BG = 'rgba(24, 27, 31, 0.99)';
 const COLOR_PANEL = 'rgba(38, 42, 48, 0.75)';
 const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
-const COLOR_TRACK = 'rgba(122, 134, 148, 0.22)';
+const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
 
 const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
 
 const BAR_HEIGHT = 9;
 const AVATAR_SIZE = 64;
-const GRAPH_HEIGHT = 120;
+// A floor, not a fixed size: the graph grows to take up any slack in its column.
+const GRAPH_MIN_HEIGHT = 96;
+// Upper bounds the graph's vertical axis steps through as load rises.
+const GRAPH_SCALES = [25, 50, 100];
 
 // One scale for the whole HUD, so bumping legibility is a single edit.
 const FONT_BODY = 14;
@@ -38,6 +41,13 @@ const FONT_HOST = 20;
 const FONT_OS = 16;
 
 const MONO = 'font-family: monospace;';
+
+// Every bar row in the left column shares these, so the bars all start and
+// end on the same two vertical lines whichever section they belong to.
+const LEFT_GRID = {nameWidth: 82, valueWidth: 96, barWidth: 64, percentWidth: 40, trailWidth: 76};
+// A row with no value cell lets its name span both columns; the extra 8 is
+// the gap that would have sat between them.
+const LEFT_WIDE_NAME = LEFT_GRID.nameWidth + LEFT_GRID.valueWidth + 8;
 
 // Keys match the 'mascot' enum in the gschema.
 const MASCOT_CHOICES = [
@@ -111,12 +121,18 @@ function sectionHeader(title, accent) {
 
 // A fixed-width track with a proportional fill. The fill is a child widget
 // whose width is restyled on each update rather than re-created.
+// The track expands to whatever its row has spare, so every row in a column
+// ends at the same edge instead of leaving a ragged gap; minWidth is only the
+// floor. The fill is therefore sized from the allocated width, and resized
+// whenever that changes.
 class Bar {
-    constructor(width) {
-        this._width = width;
+    constructor(minWidth) {
+        this._percent = 0;
+        this._color = null;
         this.actor = new St.Widget({
-            style: `width: ${width}px; height: ${BAR_HEIGHT}px;` +
+            style: `min-width: ${minWidth}px; height: ${BAR_HEIGHT}px;` +
                 `background-color: ${COLOR_TRACK}; border-radius: ${BAR_HEIGHT / 2}px;`,
+            x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
             layout_manager: new Clutter.BinLayout(),
         });
@@ -125,14 +141,25 @@ class Bar {
             y_align: Clutter.ActorAlign.FILL,
         });
         this.actor.add_child(this._fill);
+        this.actor.connect('notify::width', () => this._apply());
     }
 
     set(percent, color = null) {
-        const clamped = Math.max(0, Math.min(100, percent));
+        this._percent = Math.max(0, Math.min(100, percent));
+        this._color = color;
+        this._apply();
+    }
+
+    _apply() {
+        const width = this.actor.width;
+        if (width <= 0)
+            return;
         // A non-zero load should always leave at least a visible sliver.
-        const filled = clamped > 0 ? Math.max(2, Math.round(this._width * clamped / 100)) : 0;
+        const filled = this._percent > 0
+            ? Math.max(2, Math.round(width * this._percent / 100))
+            : 0;
         this._fill.style =
-            `width: ${filled}px; background-color: ${color ?? colorFor(clamped)};` +
+            `width: ${filled}px; background-color: ${this._color ?? colorFor(this._percent)};` +
             `border-radius: ${BAR_HEIGHT / 2}px;`;
     }
 }
@@ -141,8 +168,8 @@ class Bar {
 // the same class serves memory, storage, power and the per-core list.
 class MetricRow {
     constructor(name, {
-        dotColor = null, nameWidth = 64, valueWidth = 112, barWidth = 86,
-        percentWidth = 46, trailWidth = 0,
+        dotColor = null, nameWidth = 48, valueWidth = 92, barWidth = 80,
+        percentWidth = 40, trailWidth = 0,
     } = {}) {
         this.actor = new St.BoxLayout({vertical: false, style: 'spacing: 8px;'});
 
@@ -160,7 +187,10 @@ class MetricRow {
         this._percent = label('', `width: ${percentWidth}px; font-size: ${FONT_SMALL}px;`);
 
         this.actor.add_child(this._name);
-        this.actor.add_child(this._value);
+        // valueWidth 0 means no value cell at all, not an empty one: an empty
+        // label would still cost a gap and push the bar out of line.
+        if (valueWidth)
+            this.actor.add_child(this._value);
         this.actor.add_child(this._bar.actor);
         this.actor.add_child(this._percent);
 
@@ -190,9 +220,10 @@ const CpuGraph = GObject.registerClass(
 class CpuGraph extends St.DrawingArea {
     _init() {
         super._init({
-            style: `background-color: ${COLOR_PANEL}; border-radius: 8px; margin: 4px 0;`,
+            style: `background-color: ${COLOR_PANEL}; border-radius: 8px; margin: 4px 0;` +
+                `min-height: ${GRAPH_MIN_HEIGHT}px;`,
+            y_expand: true,
         });
-        this.set_height(GRAPH_HEIGHT);
         this._history = [];
         this._capacity = 60;
         this.connect('repaint', area => this._draw(area));
@@ -201,6 +232,16 @@ class CpuGraph extends St.DrawingArea {
     setHistory(history, capacity) {
         this._history = history;
         this._capacity = capacity;
+
+        // Fit the vertical scale to the recent peak. On a fixed 0-100% axis an
+        // idle machine draws every trace along the bottom edge and leaves the
+        // rest of the plot blank.
+        let peak = 0;
+        for (const sample of history) {
+            for (const value of sample)
+                peak = Math.max(peak, value);
+        }
+        this.scaleMax = GRAPH_SCALES.find(limit => peak <= limit) ?? 100;
         this.queue_repaint();
     }
 
@@ -212,7 +253,7 @@ class CpuGraph extends St.DrawingArea {
         const plotW = Math.max(1, width - padX * 2);
         const plotH = Math.max(1, height - padY * 2);
 
-        // 50% guide line.
+        // Guide line at half of the current scale.
         cr.setSourceRGBA(0.49, 0.53, 0.58, 0.35);
         cr.setLineWidth(1);
         cr.moveTo(padX, padY + plotH / 2);
@@ -225,6 +266,7 @@ class CpuGraph extends St.DrawingArea {
             return;
         }
 
+        const max = this.scaleMax ?? 100;
         const coreCount = samples[samples.length - 1].length;
         // Oldest sample pins to the left edge of the window, so the trace
         // scrolls instead of stretching as history fills up.
@@ -241,7 +283,8 @@ class CpuGraph extends St.DrawingArea {
                 if (value === undefined)
                     continue;
                 const x = offsetX + i * stepX;
-                const y = padY + plotH - (Math.max(0, Math.min(100, value)) / 100) * plotH;
+                const y = padY + plotH -
+                    (Math.max(0, Math.min(max, value)) / max) * plotH;
                 if (started) {
                     cr.lineTo(x, y);
                 } else {
@@ -269,7 +312,7 @@ class CatHud extends St.BoxLayout {
             track_hover: true,
             style: `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER};` +
                 'border-radius: 18px; padding: 20px 26px 24px 26px;' +
-                'box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5);',
+                'box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);',
         });
 
         this._coreRows = [];
@@ -283,18 +326,25 @@ class CatHud extends St.BoxLayout {
 
         const columns = new St.BoxLayout({vertical: false, style: 'spacing: 34px;'});
         const left = new St.BoxLayout({vertical: true});
-        const right = new St.BoxLayout({vertical: true});
+        const right = new St.BoxLayout({vertical: true, x_expand: true});
 
-        // Graphics sits on the left: the processor block (model, summary,
-        // graph and twelve core rows) is far taller than anything else, so
-        // the columns only balance with four sections opposite it.
+        // Five compact sections on the left, the processor alone on the
+        // right. The columns rarely come out the same height, so each has
+        // something that absorbs the difference -- the graph on the right,
+        // spacers between sections on the left -- and both always end on the
+        // same line. In practice the left is the taller one, so the slack
+        // becomes a bigger graph rather than blank space.
+        const spacer = () => new St.Widget({y_expand: true});
         this._buildNetwork(left);
+        left.add_child(spacer());
         this._buildMemory(left);
+        left.add_child(spacer());
         this._buildStorage(left);
+        left.add_child(spacer());
         this._buildPower(left);
+        left.add_child(spacer());
         this._buildGpu(left);
 
-        this._buildOs(right);
         this._buildCpu(right);
 
         columns.add_child(left);
@@ -348,6 +398,12 @@ class CatHud extends St.BoxLayout {
         identity.add_child(this._uptimeLabel);
         header.add_child(identity);
 
+        // The OS and kernel lines sit in what used to be dead space between
+        // the identity block and the mascot.
+        header.add_child(new St.Widget({x_expand: true}));
+        const osBox = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER});
+        this._buildOs(osBox);
+        header.add_child(osBox);
         header.add_child(new St.Widget({x_expand: true}));
 
         // The mascot speaks for itself -- its gait already says how busy the
@@ -419,13 +475,10 @@ class CatHud extends St.BoxLayout {
 
     _buildMemory(parent) {
         parent.add_child(sectionHeader('MEMORY', COLOR_NORMAL));
-        this._memRow = new MetricRow('RAM', {trailWidth: 0});
-        this._swapRow = new MetricRow('Swap', {dotColor: COLOR_VIOLET});
-        this._cacheLabel = label('',
-            `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px; margin-left: 17px;`);
+        this._memRow = new MetricRow('RAM', LEFT_GRID);
+        this._swapRow = new MetricRow('Swap', {...LEFT_GRID, dotColor: COLOR_VIOLET});
         parent.add_child(this._memRow.actor);
         parent.add_child(this._swapRow.actor);
-        parent.add_child(this._cacheLabel);
     }
 
     _buildStorage(parent) {
@@ -436,7 +489,8 @@ class CatHud extends St.BoxLayout {
 
     _buildPower(parent) {
         parent.add_child(sectionHeader('POWER', COLOR_NORMAL));
-        this._powerRow = new MetricRow('—', {nameWidth: 112, valueWidth: 0, barWidth: 86});
+        this._powerRow = new MetricRow('—',
+            {...LEFT_GRID, nameWidth: LEFT_WIDE_NAME, valueWidth: 0});
         this._powerDetail = label('',
             `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px; margin-left: 17px;`);
         parent.add_child(this._powerRow.actor);
@@ -472,7 +526,11 @@ class CatHud extends St.BoxLayout {
         this._coreGrid = new St.BoxLayout({vertical: false, style: 'spacing: 22px;'});
         this._coreColumns = [];
         for (let c = 0; c < 2; c++) {
-            const column = new St.BoxLayout({vertical: true, style: 'spacing: 2px;'});
+            const column = new St.BoxLayout({
+                vertical: true,
+                x_expand: true,
+                style: 'spacing: 2px;',
+            });
             this._coreColumns.push(column);
             this._coreGrid.add_child(column);
         }
@@ -641,7 +699,8 @@ class CatHud extends St.BoxLayout {
         const pkg = temps.package;
         this._cpuSummary.text =
             `Load ${cpu.total.toFixed(1)}%   ` +
-            (pkg !== null ? `Package ${Math.round(pkg)} °C` : 'Temp N/A');
+            (pkg !== null ? `Package ${Math.round(pkg)} °C` : 'Temp N/A') +
+            `   Graph 0–${this._graph.scaleMax}%`;
 
         if (this._coreRows.length !== cpu.cores.length) {
             for (const row of this._coreRows)
@@ -653,11 +712,11 @@ class CatHud extends St.BoxLayout {
                 const row = new MetricRow(`C${i}`, {
                     dotColor: `rgb(${coreColor(i, cpu.cores.length)
                         .map(v => Math.round(v * 255)).join(',')})`,
-                    nameWidth: 34,
-                    valueWidth: 78,
-                    barWidth: 56,
-                    percentWidth: 42,
-                    trailWidth: 62,
+                    nameWidth: 30,
+                    valueWidth: 64,
+                    barWidth: 48,
+                    percentWidth: 36,
+                    trailWidth: 44,
                 });
                 this._coreRows.push(row);
                 this._coreColumns[Math.floor(i / perColumn)].add_child(row.actor);
@@ -689,6 +748,7 @@ class CatHud extends St.BoxLayout {
         this._memRow.update({
             percent: mem.percent,
             value: `${formatBytes(mem.used)} / ${formatBytes(mem.total)}`,
+            trail: `Cache ${formatBytes(mem.cached)}`,
         });
         if (mem.swapTotal) {
             this._swapRow.update({
@@ -699,7 +759,6 @@ class CatHud extends St.BoxLayout {
         } else {
             this._swapRow.update({percent: 0, value: 'none'});
         }
-        this._cacheLabel.text = `Cache ${formatBytes(mem.cached)}`;
     }
 
     updateDisks(disks) {
@@ -707,14 +766,7 @@ class CatHud extends St.BoxLayout {
             for (const row of this._diskRows)
                 row.actor.destroy();
             this._diskRows = disks.map(() => {
-                const row = new MetricRow('', {
-                    dotColor: COLOR_WARNING,
-                    nameWidth: 92,
-                    valueWidth: 104,
-                    barWidth: 72,
-                    percentWidth: 44,
-                    trailWidth: 84,
-                });
+                const row = new MetricRow('', {...LEFT_GRID, dotColor: COLOR_WARNING});
                 this._diskBox.add_child(row.actor);
                 return row;
             });
@@ -733,15 +785,20 @@ class CatHud extends St.BoxLayout {
     updatePower(power) {
         if (!power) {
             this._powerRow.update({percent: 0, name: 'No battery'});
-            this._powerDetail.text = this._acOnlyText ?? 'Running on mains';
+            this._powerDetail.text = 'Running on mains';
+            this._powerDetail.visible = true;
             return;
         }
         this._powerRow.update({
             name: power.status === 'Full' ? 'Fully Charged' : power.status,
             percent: power.percent,
+            trail: `${power.watts.toFixed(2)} W`,
         });
-        this._powerDetail.text =
-            `Use ${power.watts.toFixed(2)} W    Time ${power.timeText}`;
+        // Time remaining only means something while running on the battery.
+        const discharging = power.status === 'Discharging';
+        this._powerDetail.visible = discharging;
+        if (discharging)
+            this._powerDetail.text = `${power.timeText} remaining`;
     }
 
     updateNetwork(net, link) {
@@ -772,13 +829,7 @@ class CatHud extends St.BoxLayout {
             this._gpuBlocks = gpus.map(() => {
                 const actor = new St.BoxLayout({vertical: true, style: 'spacing: 2px;'});
                 const name = label('', 'font-weight: bold;');
-                const vram = new MetricRow('VRAM', {
-                    dotColor: COLOR_VIOLET,
-                    nameWidth: 52,
-                    valueWidth: 122,
-                    barWidth: 68,
-                    percentWidth: 44,
-                });
+                const vram = new MetricRow('VRAM', {...LEFT_GRID, dotColor: COLOR_VIOLET});
                 const detail = label('',
                     `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px; margin-left: 17px;`);
                 actor.add_child(name);
@@ -794,19 +845,21 @@ class CatHud extends St.BoxLayout {
             block.name.text = `GPU${i}  ${gpu.name}`;
             if (gpu.detail) {
                 block.vram.actor.visible = true;
+                block.detail.visible = true;
                 block.vram.update({
                     percent: gpu.detail.memPercent,
                     value: `${gpu.detail.memUsed}MB / ${gpu.detail.memTotal}MB`,
                     barColor: COLOR_VIOLET,
+                    trail: `${gpu.detail.temp} °C`,
                 });
                 block.detail.text =
-                    `Temp ${gpu.detail.temp} °C    ` +
                     `Clock ${gpu.detail.clock}/${gpu.detail.clockMax} MHz    ` +
                     `Util ${gpu.detail.util}%`;
             } else {
-                // Integrated cards expose no counters; name only, no empty bar.
+                // Integrated cards expose no counters: name only, rather than
+                // an empty bar and a line saying so.
                 block.vram.actor.visible = false;
-                block.detail.text = 'no counters exposed';
+                block.detail.visible = false;
             }
         });
     }
