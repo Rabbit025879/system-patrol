@@ -34,7 +34,7 @@ function findBattery() {
         }
         dir.close();
     } catch (e) {
-        logError(e, 'cathud: could not enumerate power supplies');
+        logError(e, 'system-patrol: could not enumerate power supplies');
     }
     return null;
 }

@@ -41,8 +41,8 @@ function stateFor(cpuPercent) {
     return {mood: MOOD_RUN, interval: SPRINT_INTERVAL_MS};
 }
 
-export const CatIcon = GObject.registerClass(
-class CatIcon extends St.DrawingArea {
+export const MascotIcon = GObject.registerClass(
+class MascotIcon extends St.DrawingArea {
     _init(extensionPath, settings) {
         super._init({
             reactive: false,
@@ -81,7 +81,7 @@ class CatIcon extends St.DrawingArea {
                 this._setSuspended(!!Main.screenShield.locked);
             });
         } catch (e) {
-            logError(e, 'cathud: could not hook screen lock state');
+            logError(e, 'system-patrol: could not hook screen lock state');
             this._lockedChangedId = null;
         }
 
@@ -117,7 +117,7 @@ class CatIcon extends St.DrawingArea {
                 // dimensionless one; _onRepaint already skips a null frame.
                 surfaces.push(surface.getWidth() > 0 && surface.getHeight() > 0 ? surface : null);
             } catch (e) {
-                logError(e, `cathud: failed to load ${path}`);
+                logError(e, `system-patrol: failed to load ${path}`);
                 surfaces.push(null);
             }
         }

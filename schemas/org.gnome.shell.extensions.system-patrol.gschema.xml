@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <enum id="org.gnome.shell.extensions.cathud.mascot">
+  <enum id="org.gnome.shell.extensions.system-patrol.mascot">
     <value nick="cat" value="0"/>
     <value nick="raccoon" value="1"/>
   </enum>
-  <enum id="org.gnome.shell.extensions.cathud.panelmode">
+  <enum id="org.gnome.shell.extensions.system-patrol.panelmode">
     <value nick="greeting" value="0"/>
     <value nick="activity" value="1"/>
     <value nick="stats" value="2"/>
     <value nick="custom" value="3"/>
   </enum>
-  <schema id="org.gnome.shell.extensions.cathud"
-          path="/org/gnome/shell/extensions/cathud/">
-    <key name="mascot" enum="org.gnome.shell.extensions.cathud.mascot">
+  <schema id="org.gnome.shell.extensions.system-patrol"
+          path="/org/gnome/shell/extensions/system-patrol/">
+    <key name="mascot" enum="org.gnome.shell.extensions.system-patrol.mascot">
       <default>'cat'</default>
       <summary>HUD mascot</summary>
       <description>Which animal runs in the HUD.</description>
     </key>
-    <key name="panel-mode" enum="org.gnome.shell.extensions.cathud.panelmode">
+    <key name="panel-mode" enum="org.gnome.shell.extensions.system-patrol.panelmode">
       <default>'greeting'</default>
       <summary>Top bar content</summary>
       <description>Greetings, a line tied to system load, plain CPU/RAM figures, or your own text.</description>

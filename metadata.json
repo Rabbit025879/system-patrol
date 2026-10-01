@@ -1,10 +1,10 @@
 {
-  "uuid": "cathud@rabbit025879",
-  "name": "Cat HUD",
-  "description": "A floating system monitor HUD with a cat in the top bar that runs faster the busier the CPU gets.",
+  "uuid": "system-patrol@rabbit025879",
+  "name": "System Patrol",
+  "description": "A floating system monitor HUD - CPU, memory, storage, network, power and GPU - with a cat or raccoon that runs faster as the load rises.",
   "shell-version": [
     "46"
   ],
   "url": "",
-  "settings-schema": "org.gnome.shell.extensions.cathud"
+  "settings-schema": "org.gnome.shell.extensions.system-patrol"
 }

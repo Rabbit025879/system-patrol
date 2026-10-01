@@ -46,7 +46,7 @@ function integratedCards() {
         }
         dir.close();
     } catch (e) {
-        logError(e, 'cathud: could not enumerate DRM cards');
+        logError(e, 'system-patrol: could not enumerate DRM cards');
     }
     return cards;
 }

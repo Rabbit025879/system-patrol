@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the Cat HUD mascot frames.
+"""Generate the System Patrol mascot frames.
 
 The mascot is a small skeletal rig -- hip, shoulder, head, four two-segment
 legs and a tail -- posed per frame and rasterised straight onto a 36x24 pixel
