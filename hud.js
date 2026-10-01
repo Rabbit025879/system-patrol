@@ -273,6 +273,7 @@ class CatHud extends St.BoxLayout {
         this._gpuBlocks = [];
         this._backdrop = null;
         this._isOpen = false;
+        this._userMoved = false;
 
         this._buildHeader(extensionPath, settings);
 
@@ -297,6 +298,12 @@ class CatHud extends St.BoxLayout {
         this.add_child(columns);
 
         this._setupDrag();
+
+        // Content can change the HUD's size while it is open -- a disk
+        // appearing, the core rows being built on the first sample -- so
+        // centring has to follow the allocation, not happen once.
+        this.connect('notify::width', () => this._centre());
+        this.connect('notify::height', () => this._centre());
 
         this.connect('key-press-event', (_actor, event) => {
             if (event.get_key_symbol() === Clutter.KEY_Escape) {
@@ -451,6 +458,8 @@ class CatHud extends St.BoxLayout {
             if (!dragging)
                 return Clutter.EVENT_PROPAGATE;
             const [x, y] = event.get_coords();
+            // Once it has been placed by hand, stop pulling it back.
+            this._userMoved = true;
             this.set_position(
                 Math.round(originX + x - startX),
                 Math.round(originY + y - startY));
@@ -488,16 +497,16 @@ class CatHud extends St.BoxLayout {
         Main.layoutManager.addChrome(this._backdrop);
         Main.layoutManager.addChrome(this, {trackFullscreen: true});
 
-        const [, width] = this.get_preferred_width(-1);
-        const [, height] = this.get_preferred_height(-1);
-        const x = monitor.x + Math.floor((monitor.width - width) / 2);
-        const y = monitor.y + Math.floor((monitor.height - height) / 2);
+        this._userMoved = false;
+        this._centre();
 
-        this.set_position(x, y - 12);
+        // The slide runs on translation_y, not y, so it cannot fight the
+        // centring that _centre does through set_position.
         this.opacity = 0;
+        this.translation_y = -12;
         this.ease({
-            y,
             opacity: 255,
+            translation_y: 0,
             duration: 180,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
@@ -505,10 +514,36 @@ class CatHud extends St.BoxLayout {
         this.grab_key_focus();
     }
 
+    // Centres on the allocated size rather than the preferred one. Asking for
+    // the preferred size straight after addChrome measures the actor before
+    // its CSS padding and font sizes have resolved, which put the HUD off
+    // centre by however much the style adds.
+    _centre() {
+        if (!this._isOpen || this._userMoved)
+            return;
+
+        const width = this.width;
+        const height = this.height;
+        // Zero until the first allocation lands; the notify handlers below
+        // call back in once it does.
+        if (width <= 0 || height <= 0)
+            return;
+
+        const monitor = Main.layoutManager.primaryMonitor;
+        this.set_position(
+            monitor.x + Math.floor((monitor.width - width) / 2),
+            monitor.y + Math.floor((monitor.height - height) / 2));
+    }
+
     close() {
         if (!this._isOpen)
             return;
         this._isOpen = false;
+
+        // Closing mid-slide would otherwise leave the transition running and
+        // translation_y parked off zero, offsetting the next open.
+        this.remove_all_transitions();
+        this.translation_y = 0;
 
         if (this._backdrop) {
             Main.layoutManager.removeChrome(this._backdrop);
