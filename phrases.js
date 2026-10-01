@@ -1,32 +1,52 @@
-// Panel phrases. The top bar shows one short line instead of raw numbers, and
-// which line depends on how hard the machine is working -- so the sentence is
-// still a reading, just a friendlier one.
+// Panel text. The top bar stays to one short line instead of raw numbers.
 //
-// Thresholds match catIcon's animation tiers, so the words and the mascot's
-// gait always agree.
+// GREETINGS is the author's own set, carried over from an earlier customisation
+// of System Info HUD's welcome label -- raccoon and rabbit flavour, TuTzuOS
+// branding. These are the default.
+//
+// ACTIVITY is the alternative: a line tied to how hard the machine is working,
+// using the same thresholds as catIcon's animation tiers so the words and the
+// mascot's gait always agree.
+
+const GREETINGS = [
+    '🦝 The raccoon has finished today\'s patrol.',
+    '🐇 Rabbit, welcome back.',
+    '🦝 Trash inspection complete. Desktop looks edible.',
+    '🐇 Ready to hop into work?',
+    '🦝 Coffee status: assumed sufficient.',
+    '🐇 Small hops become big discoveries.',
+    '🦝 Your local raccoon assistant reporting in.',
+    '🐇 Brain status: loading...',
+    '🦝 You survived another reboot.',
+    '🐇 I dug absolutely no new rabbit holes.',
+    '🦝 Trash is clean, but your desktop isn\'t.',
+    '🐇 TuTzuOS ready',
+    '🤖 Welcome back, Tu.',
+];
+
 const SLEEP_MAX = 5;
 const CALM_MAX = 30;
 const BUSY_MAX = 70;
 
-// Rotate between the variants of a tier so the panel does not read as frozen.
-const ROTATE_SECONDS = 45;
-
-const PHRASES = {
+const ACTIVITY = {
     cat: {
-        sleep: ['貓睡成一團', '別吵，貓在睡', '兔子窩很安靜'],
-        calm: ['貓在曬太陽', '貓慢慢走著', '兔子在發呆'],
-        busy: ['貓在小跑步', '貓開始忙了', '兔子跳起來了'],
-        sprint: ['貓衝刺中！', '貓跑瘋了', '兔子全速逃跑'],
+        sleep: ['🐈 The cat is fast asleep.', '🐈 Do not disturb: cat napping.', '🐇 All quiet in the burrow.'],
+        calm: ['🐈 The cat is sunbathing.', '🐈 The cat strolls past.', '🐇 Rabbit is daydreaming.'],
+        busy: ['🐈 The cat is trotting.', '🐈 The cat found something.', '🐇 Rabbit perked up.'],
+        sprint: ['🐈 The cat is sprinting!', '🐈 The cat has gone feral.', '🐇 Rabbit bolted.'],
     },
     raccoon: {
-        sleep: ['浣熊睡著了', '別吵，浣熊在睡', '兔子窩很安靜'],
-        calm: ['浣熊在洗手', '浣熊慢慢晃', '兔子在發呆'],
-        busy: ['浣熊在翻箱子', '浣熊忙起來了', '兔子跳起來了'],
-        sprint: ['浣熊暴衝中！', '浣熊翻垃圾桶', '兔子全速逃跑'],
+        sleep: ['🦝 The raccoon is fast asleep.', '🦝 Do not disturb: raccoon napping.', '🐇 All quiet in the burrow.'],
+        calm: ['🦝 The raccoon is washing up.', '🦝 The raccoon ambles around.', '🐇 Rabbit is daydreaming.'],
+        busy: ['🦝 The raccoon is rummaging.', '🦝 The raccoon found a box.', '🐇 Rabbit perked up.'],
+        sprint: ['🦝 The raccoon is tearing around!', '🦝 Trash can down!', '🐇 Rabbit bolted.'],
     },
 };
 
-const MASCOT_NAMES = {cat: '貓', raccoon: '浣熊'};
+const MASCOT_NAMES = {cat: 'cat', raccoon: 'raccoon'};
+
+// How long a single line stays up before the next one is typed out.
+export const ROTATE_SECONDS = 90;
 
 function tierFor(cpuPercent) {
     if (cpuPercent < SLEEP_MAX)
@@ -38,13 +58,18 @@ function tierFor(cpuPercent) {
     return 'sprint';
 }
 
-// elapsedSeconds drives the rotation; callers pass their own uptime-ish clock
-// so the phrase does not jump every refresh.
-export function phraseFor(mascot, cpuPercent, elapsedSeconds) {
-    const set = PHRASES[mascot] ?? PHRASES.cat;
+// Stepping by a number coprime with the list length walks the whole set before
+// repeating, which a plain random pick does not guarantee.
+const GREETING_STEP = 5;
+
+export function greetingFor(rotation) {
+    return GREETINGS[(rotation * GREETING_STEP) % GREETINGS.length];
+}
+
+export function activityFor(mascot, cpuPercent, rotation) {
+    const set = ACTIVITY[mascot] ?? ACTIVITY.cat;
     const variants = set[tierFor(cpuPercent)];
-    const index = Math.floor(elapsedSeconds / ROTATE_SECONDS) % variants.length;
-    return variants[index];
+    return variants[rotation % variants.length];
 }
 
 // Placeholders available to a user-supplied panel string.

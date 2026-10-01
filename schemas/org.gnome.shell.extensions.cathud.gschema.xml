@@ -5,24 +5,25 @@
     <value nick="raccoon" value="1"/>
   </enum>
   <enum id="org.gnome.shell.extensions.cathud.panelmode">
-    <value nick="phrase" value="0"/>
-    <value nick="stats" value="1"/>
-    <value nick="custom" value="2"/>
+    <value nick="greeting" value="0"/>
+    <value nick="activity" value="1"/>
+    <value nick="stats" value="2"/>
+    <value nick="custom" value="3"/>
   </enum>
   <schema id="org.gnome.shell.extensions.cathud"
           path="/org/gnome/shell/extensions/cathud/">
     <key name="mascot" enum="org.gnome.shell.extensions.cathud.mascot">
       <default>'cat'</default>
-      <summary>Panel mascot</summary>
+      <summary>HUD mascot</summary>
       <description>Which animal runs in the HUD.</description>
     </key>
     <key name="panel-mode" enum="org.gnome.shell.extensions.cathud.panelmode">
-      <default>'phrase'</default>
+      <default>'greeting'</default>
       <summary>Top bar content</summary>
-      <description>A load-dependent phrase, plain CPU/RAM figures, or your own text.</description>
+      <description>Greetings, a line tied to system load, plain CPU/RAM figures, or your own text.</description>
     </key>
     <key name="panel-custom-text" type="s">
-      <default>'{mascot} 在 {host}'</default>
+      <default>'🐇 TuTzuOS · {cpu}%'</default>
       <summary>Custom top bar text</summary>
       <description>Placeholders: {cpu} {ram} {mascot} {host}</description>
     </key>

@@ -40,11 +40,19 @@ the HUD is on screen, and each on its own slower cadence.
 
 ## Top bar
 
-Three modes, in preferences:
+One line, typed out character by character, in four modes:
 
-- **Phrase** (default) — a short line that changes with load and mascot
+- **Greetings** (default) — the author's own raccoon/rabbit set, rotating every
+  90 seconds. Carried over from an earlier customisation of System Info HUD's
+  welcome label; the step through the list is coprime with its length, so all
+  thirteen appear before any repeats.
+- **Activity** — a line tied to system load, using the same thresholds as the
+  mascot's gait so the words and the animation always agree
 - **CPU / RAM figures** — the plain numbers
 - **Custom text** — your own string, with `{cpu}` `{ram}` `{mascot}` `{host}`
+
+The typing walks the string by code point rather than by UTF-16 unit, so an
+emoji is never left half-drawn mid-surrogate-pair.
 
 ## Privacy
 

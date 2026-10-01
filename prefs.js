@@ -7,8 +7,8 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 const MASCOT_KEYS = ['cat', 'raccoon'];
 const MASCOT_LABELS = ['Cat', 'Raccoon'];
 
-const PANEL_KEYS = ['phrase', 'stats', 'custom'];
-const PANEL_LABELS = ['Phrase', 'CPU / RAM figures', 'Custom text'];
+const PANEL_KEYS = ['greeting', 'activity', 'stats', 'custom'];
+const PANEL_LABELS = ['Greetings', 'Activity', 'CPU / RAM figures', 'Custom text'];
 
 function comboFor(settings, key, keys, labels, title, subtitle) {
     const current = keys.indexOf(settings.get_string(key));
@@ -43,7 +43,8 @@ export default class CatHudPreferences extends ExtensionPreferences {
             description: 'What the single line in the top bar says.',
         });
         panel.add(comboFor(settings, 'panel-mode', PANEL_KEYS, PANEL_LABELS,
-            'Content', 'Phrases change with how busy the machine is'));
+            'Content',
+            'Greetings rotate on their own; Activity follows system load'));
 
         const custom = new Adw.EntryRow({
             title: 'Custom text',

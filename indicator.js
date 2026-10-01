@@ -7,7 +7,7 @@ import St from 'gi://St';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 import {CatHud} from './hud.js';
-import {phraseFor, formatCustom} from './phrases.js';
+import {greetingFor, activityFor, formatCustom, ROTATE_SECONDS} from './phrases.js';
 import {CpuMonitor} from './metrics/cpu.js';
 import {readMemory} from './metrics/memory.js';
 import {readDisks} from './metrics/disk.js';
@@ -27,6 +27,10 @@ const OPEN_INTERVAL_MS = 1000;
 const DISK_INTERVAL_MS = 20000;
 const LINK_INTERVAL_MS = 15000;
 const GPU_INTERVAL_MS = 5000;
+
+// Matches the typing speed of the welcome label this set of greetings came
+// from, which is what makes it read as the same effect.
+const TYPE_INTERVAL_MS = 80;
 
 const COLOR_TEXT = '#d7dae0';
 
@@ -53,6 +57,8 @@ class CatHudIndicator extends PanelMenu.Button {
         this._link = null;
         this._lastCpuPercent = 0;
         this._lastMemPercent = 0;
+        this._panelTarget = null;
+        this._typeId = null;
 
         this._label = new St.Label({
             text: '…',
@@ -78,8 +84,8 @@ class CatHudIndicator extends PanelMenu.Button {
         // Only restyle from cached values -- calling _tick here would take an
         // extra CPU sample, shrinking the delta window and reporting ~0%.
         this._settingsChangedId = settings.connect('changed', () => {
-            this._label.text =
-                this._panelText(this._lastCpuPercent, this._lastMemPercent);
+            this._applyPanelText(
+                this._panelText(this._lastCpuPercent, this._lastMemPercent));
         });
 
         this.connect('destroy', () => this._onDestroy());
@@ -118,25 +124,67 @@ class CatHudIndicator extends PanelMenu.Button {
         });
     }
 
+    // Live figures change every tick, so they are written straight to the
+    // label; a greeting changes rarely and is typed out instead.
     _panelText(cpuPercent, memPercent) {
         const mascot = this._settings.get_string('mascot');
         const mode = this._settings.get_string('panel-mode');
-
-        if (mode === 'stats') {
-            return `CPU ${`${Math.round(cpuPercent)}`.padStart(3)}%  ` +
-                `RAM ${`${Math.round(memPercent)}`.padStart(3)}%`;
-        }
-        if (mode === 'custom') {
-            return formatCustom(this._settings.get_string('panel-custom-text'), {
-                cpu: cpuPercent,
-                ram: memPercent,
-                mascot,
-                host: this._static.hostname,
-            });
-        }
-
         const elapsed = GLib.get_monotonic_time() / 1e6 - this._startedAt;
-        return phraseFor(mascot, cpuPercent, elapsed);
+        const rotation = Math.floor(elapsed / ROTATE_SECONDS);
+
+        switch (mode) {
+        case 'stats':
+            return {
+                text: `CPU ${`${Math.round(cpuPercent)}`.padStart(3)}%  ` +
+                    `RAM ${`${Math.round(memPercent)}`.padStart(3)}%`,
+                typed: false,
+            };
+        case 'custom':
+            return {
+                text: formatCustom(this._settings.get_string('panel-custom-text'), {
+                    cpu: cpuPercent,
+                    ram: memPercent,
+                    mascot,
+                    host: this._static.hostname,
+                }),
+                typed: false,
+            };
+        case 'activity':
+            return {text: activityFor(mascot, cpuPercent, rotation), typed: true};
+        default:
+            return {text: greetingFor(rotation), typed: true};
+        }
+    }
+
+    _applyPanelText({text, typed}) {
+        if (text === this._panelTarget)
+            return;
+        this._panelTarget = text;
+
+        if (this._typeId) {
+            GLib.source_remove(this._typeId);
+            this._typeId = null;
+        }
+
+        if (!typed) {
+            this._label.text = text;
+            return;
+        }
+
+        // Array.from splits by code point, so an emoji is never cut in half
+        // mid-surrogate-pair the way slicing the raw string would.
+        const chars = Array.from(text);
+        let i = 0;
+        this._label.text = '';
+        this._typeId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, TYPE_INTERVAL_MS, () => {
+            i++;
+            this._label.text = chars.slice(0, i).join('');
+            if (i >= chars.length) {
+                this._typeId = null;
+                return GLib.SOURCE_REMOVE;
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
     }
 
     _tick() {
@@ -148,14 +196,16 @@ class CatHudIndicator extends PanelMenu.Button {
         if (mem)
             this._lastMemPercent = mem.percent;
 
-        this._label.text = this._panelText(this._lastCpuPercent, this._lastMemPercent);
+        const panel = this._panelText(this._lastCpuPercent, this._lastMemPercent);
+        this._applyPanelText(panel);
 
         if (!this._hud.isOpen)
             return;
 
         // The mascot only runs while it is visible, inside the HUD.
         this._hud.mascot.setCpu(this._lastCpuPercent);
-        this._hud.setPhrase(this._panelText(this._lastCpuPercent, this._lastMemPercent));
+        this._hud.setPhrase(
+            activityFor(this._settings.get_string('mascot'), this._lastCpuPercent, 0));
         this._hud.setUptime(readUptime().text);
 
         this._hud.updateCpu(cpu, {
@@ -221,6 +271,10 @@ class CatHudIndicator extends PanelMenu.Button {
         if (this._timeoutId) {
             GLib.source_remove(this._timeoutId);
             this._timeoutId = null;
+        }
+        if (this._typeId) {
+            GLib.source_remove(this._typeId);
+            this._typeId = null;
         }
         if (this._settingsChangedId) {
             this._settings.disconnect(this._settingsChangedId);
