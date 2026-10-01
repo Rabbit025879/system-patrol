@@ -6,19 +6,27 @@ import St from 'gi://St';
 
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
-import {CatIcon} from './catIcon.js';
 import {CatHud} from './hud.js';
+import {phraseFor, formatCustom} from './phrases.js';
 import {CpuMonitor} from './metrics/cpu.js';
 import {readMemory} from './metrics/memory.js';
 import {readDisks} from './metrics/disk.js';
-import {NetworkMonitor} from './metrics/network.js';
+import {NetworkMonitor, readLinkInfo} from './metrics/network.js';
+import {readStatic, readUptime} from './metrics/system.js';
+import {readPower} from './metrics/power.js';
+import {readGpus} from './metrics/gpu.js';
+import {PublicIpMonitor} from './metrics/publicip.js';
 
-// Fast enough that the cat's gait tracks what the machine is doing, slow
-// enough that sampling is not itself a measurable share of the load.
-const POLL_INTERVAL_MS = 2000;
-// Disk usage moves far more slowly, and is only worth polling while the panel
-// that shows it is actually on screen.
+// The panel only needs a load figure to pick its phrase, so it can tick
+// slowly while the HUD is shut. Open, it drives a live uptime counter.
+const IDLE_INTERVAL_MS = 3000;
+const OPEN_INTERVAL_MS = 1000;
+
+// These need a subprocess or the network, so they run far less often than
+// the counters, and only while the HUD is actually on screen.
 const DISK_INTERVAL_MS = 20000;
+const LINK_INTERVAL_MS = 15000;
+const GPU_INTERVAL_MS = 5000;
 
 const COLOR_TEXT = '#d7dae0';
 
@@ -29,42 +37,57 @@ class CatHudIndicator extends PanelMenu.Button {
         // dropping a standard popup.
         super._init(0.0, 'Cat HUD', true);
 
+        this._settings = settings;
         this._cpu = new CpuMonitor();
         this._network = new NetworkMonitor();
-        this._diskCancellable = new Gio.Cancellable();
+        this._publicIp = new PublicIpMonitor();
+        this._cancellable = new Gio.Cancellable();
+        this._static = readStatic();
 
         this._timeoutId = null;
+        this._interval = IDLE_INTERVAL_MS;
+        this._startedAt = GLib.get_monotonic_time() / 1e6;
         this._lastDiskPoll = 0;
+        this._lastLinkPoll = 0;
+        this._lastGpuPoll = 0;
+        this._link = null;
+        this._lastCpuPercent = 0;
+        this._lastMemPercent = 0;
 
-        const box = new St.BoxLayout({vertical: false, style: 'spacing: 6px;'});
-        this._catIcon = new CatIcon(extensionPath, settings);
-        box.add_child(this._catIcon);
-
-        // Monospace and a fixed width so the panel does not jitter as the
-        // numbers change width.
         this._label = new St.Label({
-            text: 'CPU  --%  RAM  --%',
+            text: '…',
             style: `font-family: monospace; color: ${COLOR_TEXT}; font-size: 12px;`,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        box.add_child(this._label);
-        this.add_child(box);
+        this.add_child(this._label);
 
-        this._hud = new CatHud();
-        this._hud.connect('closed', () => this.remove_style_pseudo_class('active'));
+        this._hud = new CatHud(extensionPath, settings);
+        this._hud.setStatic(this._static);
+        this._hud.connect('closed', () => {
+            this.remove_style_pseudo_class('active');
+            // Nothing is watching the animation once the HUD is shut.
+            this._hud.mascot.pause();
+            this._setInterval(IDLE_INTERVAL_MS);
+        });
 
         this.connect('button-press-event', () => {
             this._toggleHud();
             return Clutter.EVENT_STOP;
         });
 
+        // Only restyle from cached values -- calling _tick here would take an
+        // extra CPU sample, shrinking the delta window and reporting ~0%.
+        this._settingsChangedId = settings.connect('changed', () => {
+            this._label.text =
+                this._panelText(this._lastCpuPercent, this._lastMemPercent);
+        });
+
         this.connect('destroy', () => this._onDestroy());
 
-        // Prime the delta-based monitors so the first visible sample is real,
-        // then start ticking.
+        // Prime the delta-based monitors so the first visible sample is real.
         this._cpu.read();
         this._network.read();
-        this._startTimer();
+        this._setInterval(IDLE_INTERVAL_MS);
     }
 
     _toggleHud() {
@@ -74,50 +97,124 @@ class CatHudIndicator extends PanelMenu.Button {
         }
         this.add_style_pseudo_class('active');
         this._hud.open();
+        this._setInterval(OPEN_INTERVAL_MS);
         // Populate immediately rather than making the user wait a full tick.
         this._tick();
         this._pollDisks();
+        this._pollLink();
+        this._pollGpus();
+        this._pollPublicIp();
     }
 
-    _startTimer() {
-        this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, POLL_INTERVAL_MS, () => {
+    _setInterval(ms) {
+        if (this._timeoutId && this._interval === ms)
+            return;
+        if (this._timeoutId)
+            GLib.source_remove(this._timeoutId);
+        this._interval = ms;
+        this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
             this._tick();
             return GLib.SOURCE_CONTINUE;
         });
     }
 
+    _panelText(cpuPercent, memPercent) {
+        const mascot = this._settings.get_string('mascot');
+        const mode = this._settings.get_string('panel-mode');
+
+        if (mode === 'stats') {
+            return `CPU ${`${Math.round(cpuPercent)}`.padStart(3)}%  ` +
+                `RAM ${`${Math.round(memPercent)}`.padStart(3)}%`;
+        }
+        if (mode === 'custom') {
+            return formatCustom(this._settings.get_string('panel-custom-text'), {
+                cpu: cpuPercent,
+                ram: memPercent,
+                mascot,
+                host: this._static.hostname,
+            });
+        }
+
+        const elapsed = GLib.get_monotonic_time() / 1e6 - this._startedAt;
+        return phraseFor(mascot, cpuPercent, elapsed);
+    }
+
     _tick() {
         const cpu = this._cpu.read();
         const mem = readMemory();
-        const net = this._network.read();
 
-        this._catIcon.setCpu(cpu.ready ? cpu.total : 0);
+        if (cpu.ready)
+            this._lastCpuPercent = cpu.total;
+        if (mem)
+            this._lastMemPercent = mem.percent;
 
-        const cpuText = cpu.ready ? `${Math.round(cpu.total)}`.padStart(3) : ' --';
-        const memText = mem ? `${Math.round(mem.percent)}`.padStart(3) : ' --';
-        this._label.text = `CPU ${cpuText}%  RAM ${memText}%`;
+        this._label.text = this._panelText(this._lastCpuPercent, this._lastMemPercent);
 
         if (!this._hud.isOpen)
             return;
 
-        this._hud.setFrequencies(this._cpu.readFrequencies());
-        this._hud.updateCpu(cpu);
+        // The mascot only runs while it is visible, inside the HUD.
+        this._hud.mascot.setCpu(this._lastCpuPercent);
+        this._hud.setPhrase(this._panelText(this._lastCpuPercent, this._lastMemPercent));
+        this._hud.setUptime(readUptime().text);
+
+        this._hud.updateCpu(cpu, {
+            model: this._cpu.modelName(),
+            temps: this._cpu.readTemperatures(),
+            freqs: this._cpu.readFrequencies(),
+            history: this._cpu.history,
+            capacity: this._cpu.historyLength,
+        });
         this._hud.updateMemory(mem);
-        this._hud.updateNetwork(net);
+        this._hud.updatePower(readPower());
+        this._hud.updateNetwork(this._network.read(), this._link);
+
+        const showPublicIp = this._settings.get_boolean('show-public-ip');
+        this._hud.setPublicIpVisible(showPublicIp);
 
         const now = GLib.get_monotonic_time() / 1000;
         if (now - this._lastDiskPoll >= DISK_INTERVAL_MS)
             this._pollDisks();
+        if (now - this._lastLinkPoll >= LINK_INTERVAL_MS)
+            this._pollLink();
+        if (now - this._lastGpuPoll >= GPU_INTERVAL_MS)
+            this._pollGpus();
+        if (showPublicIp)
+            this._pollPublicIp();
     }
 
     _pollDisks() {
         this._lastDiskPoll = GLib.get_monotonic_time() / 1000;
         readDisks(disks => {
-            // The callback can outlive the panel being closed or the extension
-            // being disabled, so re-check before touching any actor.
-            if (this._hud && this._hud.isOpen)
+            // Callbacks can outlive the HUD closing or the extension being
+            // disabled, so re-check before touching any actor.
+            if (this._hud?.isOpen)
                 this._hud.updateDisks(disks);
-        }, this._diskCancellable);
+        }, this._cancellable);
+    }
+
+    _pollLink() {
+        this._lastLinkPoll = GLib.get_monotonic_time() / 1000;
+        readLinkInfo(link => {
+            this._link = link;
+            if (this._hud?.isOpen)
+                this._hud.updateNetwork(this._network.read(), link);
+        }, this._cancellable);
+    }
+
+    _pollGpus() {
+        this._lastGpuPoll = GLib.get_monotonic_time() / 1000;
+        readGpus(gpus => {
+            if (this._hud?.isOpen)
+                this._hud.updateGpus(gpus);
+        }, this._cancellable);
+    }
+
+    _pollPublicIp() {
+        this._publicIp.fetch(address => {
+            if (this._hud?.isOpen)
+                this._hud.updatePublicIp(address);
+        });
     }
 
     _onDestroy() {
@@ -125,7 +222,12 @@ class CatHudIndicator extends PanelMenu.Button {
             GLib.source_remove(this._timeoutId);
             this._timeoutId = null;
         }
-        this._diskCancellable.cancel();
+        if (this._settingsChangedId) {
+            this._settings.disconnect(this._settingsChangedId);
+            this._settingsChangedId = null;
+        }
+        this._cancellable.cancel();
+        this._publicIp.destroy();
         if (this._hud) {
             this._hud.close();
             this._hud.destroy();

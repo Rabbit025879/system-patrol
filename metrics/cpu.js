@@ -2,6 +2,10 @@ import GLib from 'gi://GLib';
 
 const STAT_PATH = '/proc/stat';
 const CPUINFO_PATH = '/proc/cpuinfo';
+const HWMON_ROOT = '/sys/class/hwmon';
+
+// Enough points to show a minute or so of history at the HUD's refresh rate.
+const HISTORY_LENGTH = 60;
 
 function readText(path) {
     try {
@@ -10,7 +14,6 @@ function readText(path) {
             return null;
         return new TextDecoder().decode(bytes);
     } catch (e) {
-        logError(e, `cathud: could not read ${path}`);
         return null;
     }
 }
@@ -27,12 +30,35 @@ function parseStatLine(line) {
     return {total, idle};
 }
 
+// coretemp exposes "Package id 0" plus one "Core N" per physical core, which
+// is fewer entries than /proc/stat's logical CPUs on an SMT machine.
+function findCoretemp() {
+    try {
+        const dir = GLib.Dir.open(HWMON_ROOT, 0);
+        let name;
+        while ((name = dir.read_name()) !== null) {
+            const path = GLib.build_filenamev([HWMON_ROOT, name]);
+            const label = readText(GLib.build_filenamev([path, 'name']))?.trim();
+            if (label === 'coretemp' || label === 'k10temp' || label === 'zenpower') {
+                dir.close();
+                return path;
+            }
+        }
+        dir.close();
+    } catch (e) {
+        // No hwmon at all; temperatures are simply unavailable.
+    }
+    return null;
+}
+
 export class CpuMonitor {
     constructor() {
         // /proc/stat counters are monotonic totals since boot, so a usage
         // percentage only exists relative to a previous sample. The first
         // read therefore reports zeroes rather than a bogus since-boot average.
         this._prev = null;
+        this._hwmonPath = findCoretemp();
+        this._history = [];
     }
 
     read() {
@@ -65,15 +91,32 @@ export class CpuMonitor {
             return Math.max(0, Math.min(100, (1 - dIdle / dTotal) * 100));
         };
 
-        return {
-            total: percentFor(0),
-            cores: samples.slice(1).map((_, i) => percentFor(i + 1)),
-            ready: true,
-        };
+        const total = percentFor(0);
+        const cores = samples.slice(1).map((_, i) => percentFor(i + 1));
+
+        this._history.push(cores);
+        if (this._history.length > HISTORY_LENGTH)
+            this._history.shift();
+
+        return {total, cores, ready: true};
     }
 
-    // Current clock per core, in MHz. Returns [] on machines whose cpuinfo
-    // omits "cpu MHz" (common on some ARM kernels).
+    // Per-core load over time, oldest first, for the HUD graph.
+    get history() {
+        return this._history;
+    }
+
+    get historyLength() {
+        return HISTORY_LENGTH;
+    }
+
+    modelName() {
+        const match = readText(CPUINFO_PATH)?.match(/^model name\s*:\s*(.+)$/m);
+        return match ? match[1].trim() : 'Unknown CPU';
+    }
+
+    // Current clock per logical core, in MHz. Returns [] on machines whose
+    // cpuinfo omits "cpu MHz" (common on some ARM kernels).
     readFrequencies() {
         const text = readText(CPUINFO_PATH);
         if (!text)
@@ -86,5 +129,38 @@ export class CpuMonitor {
                 freqs.push(Math.round(Number(match[1])));
         }
         return freqs;
+    }
+
+    // {package, cores: []} in °C, both possibly null/empty.
+    readTemperatures() {
+        if (!this._hwmonPath)
+            return {package: null, cores: []};
+
+        let packageTemp = null;
+        const cores = [];
+
+        for (let i = 1; i <= 32; i++) {
+            const label = readText(
+                GLib.build_filenamev([this._hwmonPath, `temp${i}_label`]))?.trim();
+            const raw = readText(
+                GLib.build_filenamev([this._hwmonPath, `temp${i}_input`]));
+            if (raw === null)
+                continue;
+
+            const celsius = Number(raw) / 1000;
+            if (Number.isNaN(celsius))
+                continue;
+
+            if (label && /^Package/i.test(label))
+                packageTemp = celsius;
+            else if (!label || /^Core/i.test(label))
+                cores.push(celsius);
+        }
+
+        // k10temp and friends report a single unlabelled sensor.
+        if (packageTemp === null && cores.length)
+            packageTemp = Math.max(...cores);
+
+        return {package: packageTemp, cores};
     }
 }

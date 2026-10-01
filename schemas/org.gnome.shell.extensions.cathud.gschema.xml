@@ -4,12 +4,32 @@
     <value nick="cat" value="0"/>
     <value nick="raccoon" value="1"/>
   </enum>
+  <enum id="org.gnome.shell.extensions.cathud.panelmode">
+    <value nick="phrase" value="0"/>
+    <value nick="stats" value="1"/>
+    <value nick="custom" value="2"/>
+  </enum>
   <schema id="org.gnome.shell.extensions.cathud"
           path="/org/gnome/shell/extensions/cathud/">
     <key name="mascot" enum="org.gnome.shell.extensions.cathud.mascot">
       <default>'cat'</default>
       <summary>Panel mascot</summary>
-      <description>Which animal runs in the top bar.</description>
+      <description>Which animal runs in the HUD.</description>
+    </key>
+    <key name="panel-mode" enum="org.gnome.shell.extensions.cathud.panelmode">
+      <default>'phrase'</default>
+      <summary>Top bar content</summary>
+      <description>A load-dependent phrase, plain CPU/RAM figures, or your own text.</description>
+    </key>
+    <key name="panel-custom-text" type="s">
+      <default>'{mascot} 在 {host}'</default>
+      <summary>Custom top bar text</summary>
+      <description>Placeholders: {cpu} {ram} {mascot} {host}</description>
+    </key>
+    <key name="show-public-ip" type="b">
+      <default>true</default>
+      <summary>Show public IP</summary>
+      <description>Fetches the public address from api.ipify.org. This is the only part of the HUD that leaves the machine.</description>
     </key>
   </schema>
 </schemalist>

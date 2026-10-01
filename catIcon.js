@@ -11,7 +11,8 @@ const FRAME_COUNT = 12;
 // drawing the 64px set through a NEAREST filter lands on whole source pixels
 // at 32px and stays crisp at the sizes in between.
 const FRAME_SIZE = 64;
-// 32 would map to exactly 2x the art grid, but crowds a 32px-tall panel.
+// Default when no size is given. The mascot now lives in the HUD, where it
+// can afford to be much larger than a top-bar icon.
 const ICON_SIZE = 28;
 
 const MOOD_RUN = 'run';
@@ -44,13 +45,12 @@ function runIntervalForPercent(percent) {
 
 export const CatIcon = GObject.registerClass(
 class CatIcon extends St.DrawingArea {
-    _init(extensionPath, settings) {
+    _init(extensionPath, settings, size = ICON_SIZE) {
         super._init({
-            style_class: 'system-status-icon',
             reactive: false,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this.set_size(ICON_SIZE, ICON_SIZE);
+        this.set_size(size, size);
 
         // Frames are decoded lazily per mood on first use, since a machine that
         // never idles below 5% never needs the sleep set.

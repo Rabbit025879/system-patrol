@@ -1,9 +1,11 @@
 # Cat HUD
 
-A GNOME Shell system monitor. A pixel animal sits in the top bar next to live
-CPU and RAM figures, and runs faster the busier the machine gets — curled up
-asleep under 5%, walking, trotting, then sprinting past 70%. Clicking it opens
-a floating HUD with the full breakdown.
+A GNOME Shell system monitor. The top bar stays to a single short line — the
+cat is napping, the raccoon is sprinting — and clicking it opens a floating HUD
+with the full picture: who the machine is, what it is doing, and how hard.
+
+The mascot lives **in the HUD**, not in the panel. It runs faster as CPU load
+rises and curls up asleep below 5%, so the animation is a reading too.
 
 Two mascots ship with it, a **cat** and a **raccoon**, switchable in the
 extension's preferences. The swap applies immediately — no logout needed.
@@ -15,38 +17,48 @@ extension's preferences. The swap applies immediately — no logout needed.
 
 | Section | Source | Notes |
 | --- | --- | --- |
-| CPU | `/proc/stat`, `/proc/cpuinfo` | Total plus every core, with current clock |
-| Memory | `/proc/meminfo` | Uses `MemAvailable`, and swap when configured |
-| Disk | `/proc/mounts` + GIO | Real block devices only; snap loopbacks filtered out |
-| Network | `/sys/class/net/*/statistics` | Live up/down rates per active interface |
+| Identity | AccountsService, `/proc/uptime` | Login avatar, hostname, uptime |
+| OS | `/etc/os-release`, `uname` | Distro, kernel, architecture |
+| CPU | `/proc/stat`, `/proc/cpuinfo`, `coretemp` | Total, per-core load/clock/temp, 60-sample graph |
+| Memory | `/proc/meminfo` | RAM, swap and cache |
+| Storage | `/proc/mounts` + GIO | Real block devices only; snap loopbacks filtered out |
+| Network | `/sys/class/net`, `ip`, `iwgetid` | SSID, live rates, local address |
+| Power | `/sys/class/power_supply` | Charge, watts, time remaining |
+| Graphics | `nvidia-smi`, `/sys/class/drm` | VRAM, temperature, clocks, utilisation |
 
-No external tools are required — everything comes from the kernel directly.
+Everything except the SSID, local address and GPU query comes straight from the
+kernel with no subprocess at all.
 
 ## The HUD
 
-- **Click** the panel cat to open or close it
+- **Click** the panel line to open or close it
 - **Drag** anywhere on the panel to move it
 - **Esc**, or a click outside, closes it
 
-Disk and the per-core breakdown are only polled while the HUD is on screen.
+Disks, network addresses, GPU counters and the public IP are only polled while
+the HUD is on screen, and each on its own slower cadence.
 
-## Install
+## Top bar
 
-```bash
-ln -s "$PWD" ~/.local/share/gnome-shell/extensions/cathud@rabbit025879
-gnome-extensions enable cathud@rabbit025879
-```
+Three modes, in preferences:
 
-On Wayland the shell cannot be restarted in place, so log out and back in for
-code changes to take effect — GNOME caches extension modules for the session.
+- **Phrase** (default) — a short line that changes with load and mascot
+- **CPU / RAM figures** — the plain numbers
+- **Custom text** — your own string, with `{cpu}` `{ram}` `{mascot}` `{host}`
 
-## Switching mascot
+## Privacy
+
+The public IP row queries `api.ipify.org` every 10 minutes while the HUD is
+open. **That is the only thing this extension sends off the machine**, and it
+can be turned off in preferences — everything else is local reads.
+
+## Settings
 
 ```bash
 gnome-extensions prefs cathud@rabbit025879
 ```
 
-Or straight from the command line:
+Or from the command line:
 
 ```bash
 gsettings --schemadir ~/.local/share/gnome-shell/extensions/cathud@rabbit025879/schemas set org.gnome.shell.extensions.cathud mascot raccoon
@@ -74,6 +86,18 @@ hard way here:
 - **Join the tail where the back slopes down.** Drawn any higher it separates
   from the body and reads as loose dashes floating alongside the animal.
 
+## Developing
+
+On **X11**, `Alt`+`F2` then `r` restarts the shell in place and picks up code
+changes. On **Wayland** that is not possible — log out and back in instead,
+since GNOME caches extension modules for the session.
+
+To smoke-test without touching your own session, run a nested shell:
+
+```bash
+dbus-run-session -- gnome-shell --nested --wayland
+```
+
 ## A note on GNOME versions
 
 `metadata.json` declares support for shell 46 only, because that is what this
@@ -83,7 +107,7 @@ against one breaks outright on the other. This codebase uses `vertical`.
 
 ## Credits
 
-Written from scratch. The data-collection approach was informed by reading
-[System Info HUD](https://github.com/LalaloyXyz/System-info-HUD) (GPL-3.0), and
-the animation technique is carried over from this author's own Claude Usage
-extension. No code was copied from either.
+Written from scratch. The layout and the choice of what to display were
+informed by [System Info HUD](https://github.com/LalaloyXyz/System-info-HUD)
+(GPL-3.0), and the animation technique is carried over from this author's own
+Claude Usage extension. No code was copied from either.
