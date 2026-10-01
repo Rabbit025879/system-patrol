@@ -33,6 +33,9 @@ const GPU_INTERVAL_MS = 5000;
 const TYPE_INTERVAL_MS = 80;
 
 const COLOR_TEXT = '#d7dae0';
+// Bold and a point larger than before: at regular weight the monospace
+// line looked thin next to the rest of the top bar.
+const PANEL_FONT_SIZE = 13;
 
 export const PatrolIndicator = GObject.registerClass(
 class PatrolIndicator extends PanelMenu.Button {
@@ -62,7 +65,8 @@ class PatrolIndicator extends PanelMenu.Button {
 
         this._label = new St.Label({
             text: '…',
-            style: `font-family: monospace; color: ${COLOR_TEXT}; font-size: 12px;`,
+            style: `font-family: monospace; color: ${COLOR_TEXT};` +
+                `font-size: ${PANEL_FONT_SIZE}px; font-weight: bold;`,
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this._label);
