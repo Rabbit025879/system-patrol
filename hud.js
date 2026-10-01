@@ -18,7 +18,7 @@ const COLOR_ACCENT = '#61afef';
 const COLOR_VIOLET = '#c678dd';
 const COLOR_TEXT = '#d7dae0';
 const COLOR_MUTED = '#7f8694';
-const COLOR_BG = 'rgba(26, 29, 33, 0.96)';
+const COLOR_BG = 'rgba(24, 27, 31, 0.99)';
 const COLOR_PANEL = 'rgba(38, 42, 48, 0.75)';
 const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
 const COLOR_TRACK = 'rgba(122, 134, 148, 0.22)';
@@ -26,10 +26,18 @@ const COLOR_TRACK = 'rgba(122, 134, 148, 0.22)';
 const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
 
-const BAR_HEIGHT = 7;
-const MASCOT_SIZE = 56;
-const AVATAR_SIZE = 56;
-const GRAPH_HEIGHT = 92;
+const BAR_HEIGHT = 9;
+// No caption under it any more, so the mascot can take the space instead.
+const MASCOT_SIZE = 76;
+const AVATAR_SIZE = 64;
+const GRAPH_HEIGHT = 120;
+
+// One scale for the whole HUD, so bumping legibility is a single edit.
+const FONT_BODY = 14;
+const FONT_SMALL = 12;
+const FONT_SECTION = 13;
+const FONT_HOST = 20;
+const FONT_OS = 16;
 
 const MONO = 'font-family: monospace;';
 
@@ -59,9 +67,12 @@ export function formatRate(bytesPerSecond) {
 
 // Distinct hues for the per-core graph lines, spread evenly around the wheel.
 function coreColor(index, count) {
-    const hue = (index / Math.max(1, count)) * 360;
-    const s = 0.62;
-    const l = 0.62;
+    // Spread hues around the wheel, but step by a number coprime with most
+    // core counts so adjacent cores are not adjacent hues -- neighbouring
+    // traces stay tellable apart when they overlap.
+    const hue = ((index * 5) % Math.max(1, count)) / Math.max(1, count) * 360;
+    const s = 0.95;
+    const l = 0.60;
     const k = n => (n + hue / 30) % 12;
     const a = s * Math.min(l, 1 - l);
     const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
@@ -71,22 +82,24 @@ function coreColor(index, count) {
 function label(text, style = '') {
     return new St.Label({
         text,
-        style: `${MONO} color: ${COLOR_TEXT}; font-size: 12px; ${style}`,
+        style: `${MONO} color: ${COLOR_TEXT}; font-size: ${FONT_BODY}px; ${style}`,
         y_align: Clutter.ActorAlign.CENTER,
     });
 }
 
 // A small coloured chip standing in for an icon, as in the reference layout.
 function sectionHeader(title, accent) {
-    const row = new St.BoxLayout({vertical: false, style: 'spacing: 7px; margin: 12px 0 5px 0;'});
+    const row = new St.BoxLayout({vertical: false, style: 'spacing: 8px; margin: 16px 0 7px 0;'});
     row.add_child(new St.Widget({
-        style: `width: 11px; height: 11px; border-radius: 3px; background-color: ${accent};`,
+        style: `width: 12px; height: 12px; border-radius: 3px; background-color: ${accent};`,
         y_align: Clutter.ActorAlign.CENTER,
     }));
+    // No letter-spacing here on purpose: St leaves it out of a label's
+    // natural width, so every heading came out clipped by one character.
     row.add_child(new St.Label({
         text: title,
-        style: `${MONO} color: ${COLOR_MUTED}; font-size: 11px; ` +
-            'font-weight: bold; letter-spacing: 1px;',
+        style: `${MONO} color: ${COLOR_MUTED}; font-size: ${FONT_SECTION}px;` +
+            'font-weight: bold;',
         y_align: Clutter.ActorAlign.CENTER,
     }));
     return row;
@@ -124,22 +137,23 @@ class Bar {
 // the same class serves memory, storage, power and the per-core list.
 class MetricRow {
     constructor(name, {
-        dotColor = null, nameWidth = 54, valueWidth = 96, barWidth = 72,
-        percentWidth = 38, trailWidth = 0,
+        dotColor = null, nameWidth = 64, valueWidth = 112, barWidth = 86,
+        percentWidth = 46, trailWidth = 0,
     } = {}) {
-        this.actor = new St.BoxLayout({vertical: false, style: 'spacing: 7px;'});
+        this.actor = new St.BoxLayout({vertical: false, style: 'spacing: 8px;'});
 
         this._dot = new St.Widget({
-            style: `width: 7px; height: 7px; border-radius: 4px;` +
+            style: `width: 9px; height: 9px; border-radius: 5px;` +
                 `background-color: ${dotColor ?? COLOR_NORMAL};`,
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.actor.add_child(this._dot);
 
         this._name = label(name, `width: ${nameWidth}px;`);
-        this._value = label('', `width: ${valueWidth}px; color: ${COLOR_MUTED}; font-size: 11px;`);
+        this._value = label('',
+            `width: ${valueWidth}px; color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`);
         this._bar = new Bar(barWidth);
-        this._percent = label('', `width: ${percentWidth}px; font-size: 11px;`);
+        this._percent = label('', `width: ${percentWidth}px; font-size: ${FONT_SMALL}px;`);
 
         this.actor.add_child(this._name);
         this.actor.add_child(this._value);
@@ -147,7 +161,8 @@ class MetricRow {
         this.actor.add_child(this._percent);
 
         if (trailWidth) {
-            this._trail = label('', `width: ${trailWidth}px; color: ${COLOR_MUTED}; font-size: 11px;`);
+            this._trail = label('',
+                `width: ${trailWidth}px; color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`);
             this.actor.add_child(this._trail);
         }
     }
@@ -157,7 +172,7 @@ class MetricRow {
             this._name.text = name;
         if (dotColor)
             this._dot.style =
-                `width: 7px; height: 7px; border-radius: 4px; background-color: ${dotColor};`;
+                `width: 9px; height: 9px; border-radius: 5px; background-color: ${dotColor};`;
         this._value.text = value;
         this._bar.set(percent, barColor);
         this._percent.text = `${Math.round(percent)}%`;
@@ -212,10 +227,10 @@ class CpuGraph extends St.DrawingArea {
         const stepX = plotW / Math.max(1, this._capacity - 1);
         const offsetX = padX + plotW - (samples.length - 1) * stepX;
 
-        cr.setLineWidth(1.4);
+        cr.setLineWidth(2);
         for (let core = 0; core < coreCount; core++) {
             const [r, g, b] = coreColor(core, coreCount);
-            cr.setSourceRGBA(r, g, b, 0.9);
+            cr.setSourceRGBA(r, g, b, 1);
             let started = false;
             for (let i = 0; i < samples.length; i++) {
                 const value = samples[i][core];
@@ -249,7 +264,7 @@ class CatHud extends St.BoxLayout {
             can_focus: true,
             track_hover: true,
             style: `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER};` +
-                'border-radius: 18px; padding: 16px 20px 20px 20px;' +
+                'border-radius: 18px; padding: 20px 26px 24px 26px;' +
                 'box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5);',
         });
 
@@ -261,18 +276,21 @@ class CatHud extends St.BoxLayout {
 
         this._buildHeader(extensionPath, settings);
 
-        const columns = new St.BoxLayout({vertical: false, style: 'spacing: 28px;'});
+        const columns = new St.BoxLayout({vertical: false, style: 'spacing: 34px;'});
         const left = new St.BoxLayout({vertical: true});
         const right = new St.BoxLayout({vertical: true});
 
+        // Graphics sits on the left: the processor block (model, summary,
+        // graph and twelve core rows) is far taller than anything else, so
+        // the columns only balance with four sections opposite it.
         this._buildNetwork(left);
         this._buildMemory(left);
         this._buildStorage(left);
         this._buildPower(left);
+        this._buildGpu(left);
 
         this._buildOs(right);
         this._buildCpu(right);
-        this._buildGpu(right);
 
         columns.add_child(left);
         columns.add_child(right);
@@ -305,32 +323,26 @@ class CatHud extends St.BoxLayout {
         const identity = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER});
         identity.add_child(new St.Label({
             text: 'Device name',
-            style: `${MONO} color: ${COLOR_MUTED}; font-size: 11px;`,
+            style: `${MONO} color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`,
         }));
         this._hostLabel = new St.Label({
             text: '—',
-            style: `${MONO} color: ${COLOR_TEXT}; font-size: 15px; font-weight: bold;`,
+            style: `${MONO} color: ${COLOR_TEXT}; font-size: ${FONT_HOST}px; font-weight: bold;`,
         });
         identity.add_child(this._hostLabel);
         this._uptimeLabel = new St.Label({
             text: '',
-            style: `${MONO} color: ${COLOR_MUTED}; font-size: 11px;`,
+            style: `${MONO} color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`,
         });
         identity.add_child(this._uptimeLabel);
         header.add_child(identity);
 
         header.add_child(new St.Widget({x_expand: true}));
 
-        const mascotBox = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER});
+        // The mascot speaks for itself -- its gait already says how busy the
+        // machine is, so no caption.
         this.mascot = new CatIcon(extensionPath, settings, MASCOT_SIZE);
-        mascotBox.add_child(this.mascot);
-        this._phraseLabel = new St.Label({
-            text: '',
-            style: `${MONO} color: ${COLOR_MUTED}; font-size: 11px;`,
-            x_align: Clutter.ActorAlign.CENTER,
-        });
-        mascotBox.add_child(this._phraseLabel);
-        header.add_child(mascotBox);
+        header.add_child(this.mascot);
 
         this.add_child(header);
     }
@@ -338,9 +350,11 @@ class CatHud extends St.BoxLayout {
     _buildNetwork(parent) {
         parent.add_child(sectionHeader('NETWORK', COLOR_ACCENT));
         this._wifiLabel = label('Wi-Fi : —');
-        this._rateLabel = label('', `color: ${COLOR_MUTED}; font-size: 11px;`);
-        this._publicIpLabel = label('Public IP : —', `color: ${COLOR_MUTED}; font-size: 11px;`);
-        this._localIpLabel = label('Local IP : —', `color: ${COLOR_MUTED}; font-size: 11px;`);
+        this._rateLabel = label('', `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`);
+        this._publicIpLabel = label('Public IP : —',
+            `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`);
+        this._localIpLabel = label('Local IP : —',
+            `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`);
         parent.add_child(this._wifiLabel);
         parent.add_child(this._rateLabel);
         parent.add_child(this._publicIpLabel);
@@ -351,7 +365,8 @@ class CatHud extends St.BoxLayout {
         parent.add_child(sectionHeader('MEMORY', COLOR_NORMAL));
         this._memRow = new MetricRow('RAM', {trailWidth: 0});
         this._swapRow = new MetricRow('Swap', {dotColor: COLOR_VIOLET});
-        this._cacheLabel = label('', `color: ${COLOR_MUTED}; font-size: 11px; margin-left: 14px;`);
+        this._cacheLabel = label('',
+            `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px; margin-left: 17px;`);
         parent.add_child(this._memRow.actor);
         parent.add_child(this._swapRow.actor);
         parent.add_child(this._cacheLabel);
@@ -365,8 +380,9 @@ class CatHud extends St.BoxLayout {
 
     _buildPower(parent) {
         parent.add_child(sectionHeader('POWER', COLOR_NORMAL));
-        this._powerRow = new MetricRow('—', {nameWidth: 94, valueWidth: 0, barWidth: 72});
-        this._powerDetail = label('', `color: ${COLOR_MUTED}; font-size: 11px; margin-left: 14px;`);
+        this._powerRow = new MetricRow('—', {nameWidth: 112, valueWidth: 0, barWidth: 86});
+        this._powerDetail = label('',
+            `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px; margin-left: 17px;`);
         parent.add_child(this._powerRow.actor);
         parent.add_child(this._powerDetail);
     }
@@ -374,11 +390,11 @@ class CatHud extends St.BoxLayout {
     _buildOs(parent) {
         this._osLabel = new St.Label({
             text: 'OS : —',
-            style: `${MONO} color: ${COLOR_TEXT}; font-size: 13px; font-weight: bold;`,
+            style: `${MONO} color: ${COLOR_TEXT}; font-size: ${FONT_OS}px; font-weight: bold;`,
         });
         this._kernelLabel = new St.Label({
             text: 'Kernel : —',
-            style: `${MONO} color: ${COLOR_MUTED}; font-size: 11px;`,
+            style: `${MONO} color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`,
         });
         parent.add_child(this._osLabel);
         parent.add_child(this._kernelLabel);
@@ -386,10 +402,10 @@ class CatHud extends St.BoxLayout {
 
     _buildCpu(parent) {
         parent.add_child(sectionHeader('PROCESSOR', COLOR_ACCENT));
-        this._cpuModelLabel = label('—', `font-size: 11px;`);
+        this._cpuModelLabel = label('—');
         parent.add_child(this._cpuModelLabel);
 
-        this._cpuSummary = label('', `color: ${COLOR_MUTED}; font-size: 11px;`);
+        this._cpuSummary = label('', `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`);
         parent.add_child(this._cpuSummary);
 
         this._graph = new CpuGraph();
@@ -397,7 +413,7 @@ class CatHud extends St.BoxLayout {
 
         // Per-core rows are created on the first sample, once the core count
         // is actually known, then only updated afterwards.
-        this._coreGrid = new St.BoxLayout({vertical: false, style: 'spacing: 18px;'});
+        this._coreGrid = new St.BoxLayout({vertical: false, style: 'spacing: 22px;'});
         this._coreColumns = [];
         for (let c = 0; c < 2; c++) {
             const column = new St.BoxLayout({vertical: true, style: 'spacing: 2px;'});
@@ -529,10 +545,6 @@ class CatHud extends St.BoxLayout {
         this._uptimeLabel.text = text;
     }
 
-    setPhrase(text) {
-        this._phraseLabel.text = text;
-    }
-
     updateCpu(cpu, {model, temps, freqs, history, capacity, coreIds}) {
         this._cpuModelLabel.text = model;
         this._graph.setHistory(history, capacity);
@@ -557,11 +569,11 @@ class CatHud extends St.BoxLayout {
                 const row = new MetricRow(`C${i}`, {
                     dotColor: `rgb(${coreColor(i, cpu.cores.length)
                         .map(v => Math.round(v * 255)).join(',')})`,
-                    nameWidth: 26,
-                    valueWidth: 60,
-                    barWidth: 46,
-                    percentWidth: 34,
-                    trailWidth: 52,
+                    nameWidth: 34,
+                    valueWidth: 78,
+                    barWidth: 56,
+                    percentWidth: 42,
+                    trailWidth: 62,
                 });
                 this._coreRows.push(row);
                 this._coreColumns[Math.floor(i / perColumn)].add_child(row.actor);
@@ -613,11 +625,11 @@ class CatHud extends St.BoxLayout {
             this._diskRows = disks.map(() => {
                 const row = new MetricRow('', {
                     dotColor: COLOR_WARNING,
-                    nameWidth: 76,
-                    valueWidth: 86,
-                    barWidth: 60,
-                    percentWidth: 36,
-                    trailWidth: 70,
+                    nameWidth: 92,
+                    valueWidth: 104,
+                    barWidth: 72,
+                    percentWidth: 44,
+                    trailWidth: 84,
                 });
                 this._diskBox.add_child(row.actor);
                 return row;
@@ -675,15 +687,16 @@ class CatHud extends St.BoxLayout {
                 block.actor.destroy();
             this._gpuBlocks = gpus.map(() => {
                 const actor = new St.BoxLayout({vertical: true, style: 'spacing: 2px;'});
-                const name = label('', 'font-size: 11px; font-weight: bold;');
+                const name = label('', 'font-weight: bold;');
                 const vram = new MetricRow('VRAM', {
                     dotColor: COLOR_VIOLET,
-                    nameWidth: 42,
-                    valueWidth: 100,
-                    barWidth: 56,
-                    percentWidth: 36,
+                    nameWidth: 52,
+                    valueWidth: 122,
+                    barWidth: 68,
+                    percentWidth: 44,
                 });
-                const detail = label('', `color: ${COLOR_MUTED}; font-size: 11px; margin-left: 14px;`);
+                const detail = label('',
+                    `color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px; margin-left: 17px;`);
                 actor.add_child(name);
                 actor.add_child(vram.actor);
                 actor.add_child(detail);

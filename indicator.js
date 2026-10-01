@@ -204,8 +204,6 @@ class CatHudIndicator extends PanelMenu.Button {
 
         // The mascot only runs while it is visible, inside the HUD.
         this._hud.mascot.setCpu(this._lastCpuPercent);
-        this._hud.setPhrase(
-            activityFor(this._settings.get_string('mascot'), this._lastCpuPercent, 0));
         this._hud.setUptime(readUptime().text);
 
         this._hud.updateCpu(cpu, {
