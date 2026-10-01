@@ -39,6 +39,12 @@ const FONT_OS = 16;
 
 const MONO = 'font-family: monospace;';
 
+// Keys match the 'mascot' enum in the gschema.
+const MASCOT_CHOICES = [
+    {key: 'cat', glyph: '🐈', name: 'Cat'},
+    {key: 'raccoon', glyph: '🦝', name: 'Raccoon'},
+];
+
 function colorFor(percent) {
     if (percent >= CRITICAL_PERCENT)
         return COLOR_CRITICAL;
@@ -345,11 +351,56 @@ class CatHud extends St.BoxLayout {
         header.add_child(new St.Widget({x_expand: true}));
 
         // The mascot speaks for itself -- its gait already says how busy the
-        // machine is, so no caption.
+        // machine is, so no caption. Underneath sits a switch between the two.
+        const mascotBox = new St.BoxLayout({
+            vertical: true,
+            style: 'spacing: 6px;',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
         this.mascot = new CatIcon(extensionPath, settings);
-        header.add_child(this.mascot);
+        mascotBox.add_child(this.mascot);
+        mascotBox.add_child(this._buildMascotSwitch(settings));
+        header.add_child(mascotBox);
 
         this.add_child(header);
+    }
+
+    // A two-segment toggle writing straight to the 'mascot' setting. CatIcon
+    // already listens for that key, so the animation swaps immediately, and
+    // the preferences window stays in step because both read the same key.
+    _buildMascotSwitch(settings) {
+        const pill = new St.BoxLayout({
+            vertical: false,
+            x_align: Clutter.ActorAlign.CENTER,
+            style: `background-color: ${COLOR_TRACK}; border-radius: 11px; padding: 2px;`,
+        });
+
+        const segments = MASCOT_CHOICES.map(({key, glyph, name}) => {
+            const button = new St.Button({
+                label: glyph,
+                can_focus: true,
+                accessible_name: name,
+            });
+            button.connect('clicked', () => settings.set_string('mascot', key));
+            pill.add_child(button);
+            return {key, button};
+        });
+
+        const restyle = () => {
+            const current = settings.get_string('mascot');
+            for (const {key, button} of segments) {
+                const active = key === current;
+                button.style =
+                    `font-size: ${FONT_SMALL}px; padding: 2px 12px; border-radius: 9px;` +
+                    `background-color: ${active ? COLOR_ACCENT : 'transparent'};`;
+                button.opacity = active ? 255 : 150;
+            }
+        };
+        restyle();
+
+        const changedId = settings.connect('changed::mascot', restyle);
+        pill.connect('destroy', () => settings.disconnect(changedId));
+        return pill;
     }
 
     _buildNetwork(parent) {

@@ -7,8 +7,9 @@ with the full picture: who the machine is, what it is doing, and how hard.
 The mascot lives **in the HUD**, not in the panel. It runs faster as CPU load
 rises and curls up asleep below 5%, so the animation is a reading too.
 
-Two mascots ship with it, a **cat** and a **raccoon**, switchable in the
-extension's preferences. The swap applies immediately — no logout needed.
+Two mascots ship with it, a **cat** and a **raccoon**. Switch between them
+with the 🐈 / 🦝 toggle under the mascot in the HUD, or in the extension's
+preferences. The swap applies immediately — no logout needed.
 
 ![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-46-4A86CF)
 ![Platform](https://img.shields.io/badge/Platform-Linux-FCC624)
