@@ -214,6 +214,7 @@ class CatHudIndicator extends PanelMenu.Button {
             freqs: this._cpu.readFrequencies(),
             history: this._cpu.history,
             capacity: this._cpu.historyLength,
+            coreIds: this._cpu.coreIds,
         });
         this._hud.updateMemory(mem);
         this._hud.updatePower(readPower());

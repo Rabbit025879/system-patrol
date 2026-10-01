@@ -3,6 +3,7 @@ import GLib from 'gi://GLib';
 const STAT_PATH = '/proc/stat';
 const CPUINFO_PATH = '/proc/cpuinfo';
 const HWMON_ROOT = '/sys/class/hwmon';
+const CPU_TOPOLOGY_ROOT = '/sys/devices/system/cpu';
 
 // Enough points to show a minute or so of history at the HUD's refresh rate.
 const HISTORY_LENGTH = 60;
@@ -28,6 +29,26 @@ function parseStatLine(line) {
     const total = fields.reduce((sum, n) => sum + n, 0);
     const idle = fields[3] + (fields[4] ?? 0);
     return {total, idle};
+}
+
+// Maps each logical CPU to the physical core it sits on, so a per-thread row
+// can be labelled with its core's temperature.
+//
+// This has to be read, not assumed. On this i5-11400H the SMT siblings are
+// cpu0/cpu6, not cpu0/cpu1, so the obvious floor(i/2) guess attaches the wrong
+// sensor to most threads. Layouts also differ across AMD and P-core/E-core
+// parts, and core ids are not always contiguous.
+function readCoreIds() {
+    const ids = [];
+    for (let i = 0; ; i++) {
+        const raw = readText(GLib.build_filenamev(
+            [CPU_TOPOLOGY_ROOT, `cpu${i}`, 'topology', 'core_id']));
+        if (raw === null)
+            break;
+        const id = Number(raw.trim());
+        ids.push(Number.isNaN(id) ? null : id);
+    }
+    return ids;
 }
 
 // coretemp exposes "Package id 0" plus one "Core N" per physical core, which
@@ -58,6 +79,7 @@ export class CpuMonitor {
         // read therefore reports zeroes rather than a bogus since-boot average.
         this._prev = null;
         this._hwmonPath = findCoretemp();
+        this._coreIds = readCoreIds();
         this._history = [];
     }
 
@@ -101,6 +123,11 @@ export class CpuMonitor {
         return {total, cores, ready: true};
     }
 
+    // coreIds[logicalCpu] -> physical core id.
+    get coreIds() {
+        return this._coreIds;
+    }
+
     // Per-core load over time, oldest first, for the HUD graph.
     get history() {
         return this._history;
@@ -131,15 +158,18 @@ export class CpuMonitor {
         return freqs;
     }
 
-    // {package, cores: []} in °C, both possibly null/empty.
+    // {package, byCoreId} in °C. byCoreId is keyed by the physical core id
+    // parsed out of coretemp's "Core N" label -- matching it positionally
+    // would break wherever those ids are not a contiguous 0..n-1 run.
     readTemperatures() {
         if (!this._hwmonPath)
-            return {package: null, cores: []};
+            return {package: null, byCoreId: new Map()};
 
         let packageTemp = null;
-        const cores = [];
+        const byCoreId = new Map();
+        const unlabelled = [];
 
-        for (let i = 1; i <= 32; i++) {
+        for (let i = 1; i <= 64; i++) {
             const label = readText(
                 GLib.build_filenamev([this._hwmonPath, `temp${i}_label`]))?.trim();
             const raw = readText(
@@ -151,16 +181,27 @@ export class CpuMonitor {
             if (Number.isNaN(celsius))
                 continue;
 
-            if (label && /^Package/i.test(label))
+            if (label && /^Package/i.test(label)) {
                 packageTemp = celsius;
-            else if (!label || /^Core/i.test(label))
-                cores.push(celsius);
+                continue;
+            }
+
+            const coreMatch = label?.match(/^Core\s+(\d+)/i);
+            if (coreMatch)
+                byCoreId.set(Number(coreMatch[1]), celsius);
+            else if (!label)
+                unlabelled.push(celsius);
         }
 
-        // k10temp and friends report a single unlabelled sensor.
-        if (packageTemp === null && cores.length)
-            packageTemp = Math.max(...cores);
+        // k10temp and friends report a single unlabelled sensor and no
+        // per-core breakdown at all.
+        if (packageTemp === null) {
+            if (byCoreId.size)
+                packageTemp = Math.max(...byCoreId.values());
+            else if (unlabelled.length)
+                packageTemp = Math.max(...unlabelled);
+        }
 
-        return {package: packageTemp, cores};
+        return {package: packageTemp, byCoreId};
     }
 }

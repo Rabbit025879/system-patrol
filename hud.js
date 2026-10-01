@@ -533,7 +533,7 @@ class CatHud extends St.BoxLayout {
         this._phraseLabel.text = text;
     }
 
-    updateCpu(cpu, {model, temps, freqs, history, capacity}) {
+    updateCpu(cpu, {model, temps, freqs, history, capacity, coreIds}) {
         this._cpuModelLabel.text = model;
         this._graph.setHistory(history, capacity);
 
@@ -568,16 +568,15 @@ class CatHud extends St.BoxLayout {
             });
         }
 
-        // coretemp reports one sensor per physical core, so on an SMT machine
-        // two logical cores share a reading.
-        const perCoreTemp = temps.cores;
-        const threadsPerCore = perCoreTemp.length
-            ? Math.max(1, Math.round(cpu.cores.length / perCoreTemp.length))
-            : 0;
-
+        // coretemp has one sensor per physical core, so SMT siblings share a
+        // reading. Which threads are siblings comes from the kernel topology,
+        // not from thread order -- see readCoreIds in metrics/cpu.js.
         cpu.cores.forEach((percent, i) => {
             const mhz = freqs[i];
-            const temp = threadsPerCore ? perCoreTemp[Math.floor(i / threadsPerCore)] : undefined;
+            const coreId = coreIds[i];
+            const temp = coreId === undefined || coreId === null
+                ? undefined
+                : temps.byCoreId.get(coreId);
             this._coreRows[i].update({
                 percent,
                 value: mhz ? `${mhz} MHz` : '',
