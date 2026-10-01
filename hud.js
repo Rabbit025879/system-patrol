@@ -27,8 +27,6 @@ const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
 
 const BAR_HEIGHT = 9;
-// No caption under it any more, so the mascot can take the space instead.
-const MASCOT_SIZE = 76;
 const AVATAR_SIZE = 64;
 const GRAPH_HEIGHT = 120;
 
@@ -348,7 +346,7 @@ class CatHud extends St.BoxLayout {
 
         // The mascot speaks for itself -- its gait already says how busy the
         // machine is, so no caption.
-        this.mascot = new CatIcon(extensionPath, settings, MASCOT_SIZE);
+        this.mascot = new CatIcon(extensionPath, settings);
         header.add_child(this.mascot);
 
         this.add_child(header);
