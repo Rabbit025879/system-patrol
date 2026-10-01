@@ -47,16 +47,12 @@ MASCOTS = {
         "mask": False,
         "stripes": True,
     },
-    # Same rig with a raccoon's markings: bandit mask, banded bushy tail,
-    # dark paws. Marking tone stays mid-grey -- true raccoon-black vanishes
-    # against a dark background.
+    # Warm grey-brown with cream markings. The raccoon has its own frame
+    # builders further down: a different animal, not a recoloured cat.
     "raccoon": {
-        "body": (178, 186, 196, 255),
-        "dark": (92, 101, 114, 255),
-        "light": (222, 227, 233, 255),
-        "tail_size": 3,
-        "tail_rings": True,
-        "mask": True,
+        "body": (156, 150, 146, 255),
+        "dark": (78, 74, 78, 255),
+        "light": (228, 224, 216, 255),
         "stripes": False,
     },
 }
@@ -108,9 +104,9 @@ def polar(origin, angle_deg, length):
     return (origin[0] + math.sin(a) * length, origin[1] + math.cos(a) * length)
 
 
-def draw_leg(c, hip, thigh, shin, color, paw):
-    knee = polar(hip, thigh, 3.4)
-    foot = polar(knee, shin, 3.6)
+def draw_leg(c, hip, thigh, shin, color, paw, thigh_len=3.4, shin_len=3.6):
+    knee = polar(hip, thigh, thigh_len)
+    foot = polar(knee, shin, shin_len)
     # Never let a foot sink below the ground line.
     foot = (foot[0], min(foot[1], GROUND - 1))
     c.line(hip, knee, color)
@@ -119,7 +115,7 @@ def draw_leg(c, hip, thigh, shin, color, paw):
 
 
 def draw_tail(c, base, mid, tip, spec, color=None):
-    size = spec["tail_size"]
+    size = 2
     base_color = color or spec["body"]
     points = []
     for k in range(13):
@@ -128,8 +124,7 @@ def draw_tail(c, base, mid, tip, spec, color=None):
         y = (1 - t) ** 2 * base[1] + 2 * (1 - t) * t * mid[1] + t * t * tip[1]
         points.append((round(x), round(y)))
     for k, (x, y) in enumerate(points):
-        ringed = spec["tail_rings"] and (k // 2) % 2 == 1
-        c.dot(x - (size - 2), y, spec["dark"] if ringed else base_color, size)
+        c.dot(x - (size - 2), y, base_color, size)
 
 
 def draw_head(c, centre, spec, eye_open=True):
@@ -146,10 +141,6 @@ def draw_head(c, centre, spec, eye_open=True):
     # Muzzle and nose.
     c.dot(hx + 3, hy + 1, spec["light"], 2)
     c.dot(hx + 4, hy + 1, PINK)
-    if spec["mask"]:
-        for mx in range(0, 4):
-            c.dot(hx + mx, hy - 1, spec["dark"])
-            c.dot(hx + mx, hy, spec["dark"])
     if eye_open:
         c.dot(hx + 1, hy - 1, WHITE)
         c.dot(hx + 1, hy, WHITE)
@@ -160,8 +151,8 @@ def draw_head(c, centre, spec, eye_open=True):
         c.dot(hx + 2, hy, PUPIL)
 
 
-def draw_body(c, hip, shoulder, spec):
-    c.capsule(hip, shoulder, 4.0, 4.3, spec["body"])
+def draw_body(c, hip, shoulder, spec, hip_r=4.0, shoulder_r=4.3):
+    c.capsule(hip, shoulder, hip_r, shoulder_r, spec["body"])
     # Pale belly: the lowest two rows of the torso, following its slope, so
     # it hugs the underside instead of floating as a bar across the flank.
     span = max(1, shoulder[0] - hip[0])
@@ -209,7 +200,7 @@ def run_frame(spec, i):
               (tail_base[0] - 5, tail_base[1] - 1 + 1.5 * wag),
               (tail_base[0] - 8, tail_base[1] - 4 - 2.5 * ext), spec)
     draw_body(c, hip, shoulder, spec)
-    legs(0.0, spec["body"], spec["dark"] if spec["mask"] else spec["light"])
+    legs(0.0, spec["body"], spec["light"])
     draw_head(c, (shoulder[0] + 5, shoulder[1] - 4 + round(0.6 * ext)), spec)
     return c.img
 
@@ -238,9 +229,8 @@ def walk_frame(spec, i):
               (tail_base[0] - 4, tail_base[1] - 3),
               (tail_base[0] - 4 + 1.5 * sway, tail_base[1] - 8), spec)
     draw_body(c, hip, shoulder, spec)
-    paw = spec["dark"] if spec["mask"] else spec["light"]
-    leg(hind, 0.0, spec["body"], paw)
-    leg(fore, 0.5 * math.pi, spec["body"], paw)
+    leg(hind, 0.0, spec["body"], spec["light"])
+    leg(fore, 0.5 * math.pi, spec["body"], spec["light"])
     draw_head(c, (shoulder[0] + 5, shoulder[1] - 4 + (1 - bob if i % 6 == 0 else 0)), spec)
     return c.img
 
@@ -272,7 +262,191 @@ def sleep_frame(spec, i):
     return c.img
 
 
-BUILDERS = {"run": run_frame, "walk": walk_frame, "sleep": sleep_frame}
+# --- raccoon ---------------------------------------------------------------
+#
+# Built from the same primitives as the cat but with its own anatomy: a heavy
+# rump carried higher than the shoulders, short legs, a low-slung head with a
+# pointed snout and bandit mask, and a thick banded tail held out behind
+# rather than up.
+
+RACCOON_HIP_R = 4.9
+RACCOON_SHOULDER_R = 4.2
+RACCOON_THIGH = 2.6
+RACCOON_SHIN = 3.0
+
+
+RACCOON_BAND = 2.2
+
+
+def draw_raccoon_tail(c, base, mid, tip, spec, base_color=None, bushy=True):
+    """Bushy and banded, ending on a dark tip.
+
+    Bands are measured along the curve from the tip, not by sample index, so
+    they stay the same width however long or bent the tail is in a pose --
+    indexed bands squeezed down to an unreadable dark block on short tails.
+    """
+    body = base_color or spec["body"]
+    samples = 48
+    points = []
+    for k in range(samples):
+        t = k / (samples - 1)
+        x = (1 - t) ** 2 * base[0] + 2 * (1 - t) * t * mid[0] + t * t * tip[0]
+        y = (1 - t) ** 2 * base[1] + 2 * (1 - t) * t * mid[1] + t * t * tip[1]
+        points.append((x, y))
+    arc = [0.0]
+    for a, b in zip(points, points[1:]):
+        arc.append(arc[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    total = arc[-1]
+    # Each pixel takes the band of the nearest point on the curve. Stamping
+    # blocks in order instead lets every stamp paint over its neighbours, and
+    # a brush wider than a band wipes the bands out.
+    nearest = {}
+    for (x, y), d in zip(points, arc):
+        t = d / total if total else 0
+        size = 4 if bushy and 0.2 < t < 0.85 else 3
+        dark = int((total - d) / RACCOON_BAND) % 2 == 0
+        ox, oy = round(x) - size // 2, round(y) - size // 2
+        for dy in range(size):
+            for dx in range(size):
+                key = (ox + dx, oy + dy)
+                dist = math.hypot(key[0] - x, key[1] - y)
+                if key not in nearest or dist < nearest[key][0]:
+                    nearest[key] = (dist, dark)
+    for (px, py), (_, dark) in nearest.items():
+        c.dot(px, py, spec["dark"] if dark else body)
+
+
+def draw_raccoon_head(c, centre, spec, eye_open=True):
+    hx, hy = centre
+    # Small rounded ears, solid, with a pale inner pixel. Drawn first so the
+    # skull overlaps them. A pale rim round a dark centre read as hollow loops
+    # against the dark HUD.
+    for ex in (-3, 1):
+        c.dot(hx + ex, hy - 5, spec["body"])
+        c.dot(hx + ex + 1, hy - 5, spec["body"])
+        c.dot(hx + ex - 1, hy - 4, spec["body"])
+        c.dot(hx + ex, hy - 4, spec["light"])
+        c.dot(hx + ex + 1, hy - 4, spec["body"])
+        c.dot(hx + ex + 2, hy - 4, spec["body"])
+    c.ellipse(hx, hy, 4.4, 3.9, spec["body"])
+    # Pale brow over the mask, pale muzzle under it.
+    for x in range(0, 4):
+        c.dot(hx + x, hy - 2, spec["light"])
+    for x in range(1, 5):
+        c.dot(hx + x, hy + 1, spec["light"])
+        c.dot(hx + x, hy + 2, spec["light"])
+    # The mask itself.
+    for x in range(-1, 4):
+        c.dot(hx + x, hy - 1, spec["dark"])
+        c.dot(hx + x, hy, spec["dark"])
+    # Snout pokes out past the skull, nose on the end.
+    c.dot(hx + 4, hy, spec["light"])
+    c.dot(hx + 5, hy, spec["light"])
+    c.dot(hx + 5, hy + 1, PUPIL)
+    if eye_open:
+        c.dot(hx + 2, hy - 1, WHITE)
+    else:
+        c.dot(hx + 1, hy, spec["body"])
+        c.dot(hx + 2, hy, spec["body"])
+
+
+def raccoon_leg(c, origin, thigh, shin, color, spec):
+    draw_leg(c, origin, thigh, shin, color, spec["dark"], RACCOON_THIGH, RACCOON_SHIN)
+
+
+def raccoon_run_frame(spec, i):
+    """A bounding lope: shorter reach than the cat's gallop, more rock, and
+    the tail streaming level behind."""
+    th = 2 * math.pi * i / FRAME_COUNT
+    ext = -math.sin(th)
+    lift = round(max(0.0, ext) * 1.3)
+    rock = round(1.0 * math.cos(th))
+
+    hip = (14 - round(1.0 * ext), 13 - lift + rock)
+    shoulder = (22 + round(1.0 * ext), 14 - lift - rock)
+    c = Canvas()
+
+    def legs(phase, color):
+        e = -math.sin(th - phase)
+        fold = (1 - e) / 2
+        hind_thigh = -46 * e
+        fore_thigh = 46 * e
+        raccoon_leg(c, (hip[0] - 1, hip[1] + 3), hind_thigh,
+                    hind_thigh - 5 - 40 * fold, color, spec)
+        raccoon_leg(c, (shoulder[0] + 1, shoulder[1] + 2), fore_thigh,
+                    fore_thigh + 10 - 60 * fold, color, spec)
+
+    legs(0.7, spec["dark"])
+    wag = math.sin(th + 1.0)
+    tail_base = (hip[0] - 4, hip[1] - 1)
+    draw_raccoon_tail(c, tail_base,
+                      (tail_base[0] - 4, tail_base[1] - 1 + 1.5 * wag),
+                      (tail_base[0] - 8, tail_base[1] + 1 - 2.0 * ext), spec)
+    draw_body(c, hip, shoulder, spec, RACCOON_HIP_R, RACCOON_SHOULDER_R)
+    legs(0.0, spec["body"])
+    draw_raccoon_head(c, (shoulder[0] + 5, shoulder[1] - 2 + round(0.6 * ext)), spec)
+    return c.img
+
+
+def raccoon_walk_frame(spec, i):
+    """A waddle: hips and shoulders bob out of step, head low, tail trailing."""
+    th = 2 * math.pi * i / FRAME_COUNT
+    hip_bob = 1 if math.sin(2 * th) > 0.5 else 0
+    shoulder_bob = 1 if math.sin(2 * th + math.pi) > 0.5 else 0
+    hip = (14, 13 + hip_bob)
+    shoulder = (22, 14 + shoulder_bob)
+    c = Canvas()
+
+    def leg(origin, phase, color):
+        swing = 20 * math.sin(th + phase)
+        raise_ = 34 * max(0.0, math.cos(th + phase))
+        raccoon_leg(c, origin, swing, swing - raise_, color, spec)
+
+    hind = (hip[0] - 1, hip[1] + 3)
+    fore = (shoulder[0] + 1, shoulder[1] + 2)
+    leg(hind, math.pi, spec["dark"])
+    leg(fore, 1.5 * math.pi, spec["dark"])
+
+    sway = math.sin(th)
+    tail_base = (hip[0] - 4, hip[1])
+    draw_raccoon_tail(c, tail_base,
+                      (tail_base[0] - 4, tail_base[1] + 1),
+                      (tail_base[0] - 8, tail_base[1] + 3 + 1.2 * sway), spec)
+    draw_body(c, hip, shoulder, spec, RACCOON_HIP_R, RACCOON_SHOULDER_R)
+    leg(hind, 0.0, spec["body"])
+    leg(fore, 0.5 * math.pi, spec["body"])
+    draw_raccoon_head(c, (shoulder[0] + 5, shoulder[1] - 2), spec)
+    return c.img
+
+
+def raccoon_sleep_frame(spec, i):
+    """Curled up with the banded tail wrapped round the front; the tail tip
+    twitches once a loop."""
+    th = 2 * math.pi * i / FRAME_COUNT
+    breath = (1 - math.cos(th)) / 2
+    c = Canvas()
+    top = 0.9 * breath
+    c.ellipse(15, 17.0 - top, 10.5, 5.2 + top, spec["body"])
+    for hx, hy in ((8, 18), (9, 17), (10, 17), (11, 17), (12, 18), (12, 19)):
+        c.dot(hx, hy, spec["dark"])
+    c.ellipse(24, 18, 4.6, 4.1, spec["dark"])
+    draw_raccoon_head(c, (25, 18), spec, eye_open=False)
+    twitch = 1 if i in (4, 5) else 0
+    # Pale between the bands here: body-coloured bands would vanish against
+    # the body the tail is lying on.
+    draw_raccoon_tail(c, (4, 18), (7, 22), (20, 21 - twitch), spec,
+                      base_color=spec["light"], bushy=False)
+    return c.img
+
+
+BUILDERS = {
+    "cat": {"run": run_frame, "walk": walk_frame, "sleep": sleep_frame},
+    "raccoon": {
+        "run": raccoon_run_frame,
+        "walk": raccoon_walk_frame,
+        "sleep": raccoon_sleep_frame,
+    },
+}
 
 
 def upscale(img, scale):
@@ -291,7 +465,7 @@ def main():
     written = 0
     for mascot, spec in MASCOTS.items():
         for mood in MOODS:
-            frames = [BUILDERS[mood](spec, i) for i in range(FRAME_COUNT)]
+            frames = [BUILDERS[mascot][mood](spec, i) for i in range(FRAME_COUNT)]
             out_dir = os.path.join(OUT_ROOT, mascot, mood)
             os.makedirs(out_dir, exist_ok=True)
             for i, frame in enumerate(frames):
