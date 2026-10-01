@@ -4,7 +4,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {CatIcon} from './catIcon.js';
+import {MascotIcon} from './mascotIcon.js';
 
 // NOTE: this extension targets GNOME Shell 46, where St.BoxLayout takes a
 // boolean `vertical`. The `orientation` property only exists from GNOME 48 on,
@@ -311,11 +311,11 @@ class CpuGraph extends St.DrawingArea {
     }
 });
 
-export const CatHud = GObject.registerClass({
+export const PatrolHud = GObject.registerClass({
     // 'closed' has to be declared here; emitting an undeclared signal throws.
     Signals: {'closed': {}},
 },
-class CatHud extends St.BoxLayout {
+class PatrolHud extends St.BoxLayout {
     _init(extensionPath, settings) {
         super._init({
             vertical: true,
@@ -425,7 +425,7 @@ class CatHud extends St.BoxLayout {
             style: 'spacing: 6px;',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this.mascot = new CatIcon(extensionPath, settings);
+        this.mascot = new MascotIcon(extensionPath, settings);
         mascotBox.add_child(this.mascot);
         mascotBox.add_child(this._buildMascotSwitch(settings));
         header.add_child(mascotBox);
@@ -433,7 +433,7 @@ class CatHud extends St.BoxLayout {
         this.add_child(header);
     }
 
-    // A two-segment toggle writing straight to the 'mascot' setting. CatIcon
+    // A two-segment toggle writing straight to the 'mascot' setting. MascotIcon
     // already listens for that key, so the animation swaps immediately, and
     // the preferences window stays in step because both read the same key.
     _buildMascotSwitch(settings) {

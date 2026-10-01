@@ -62,7 +62,7 @@ export class NetworkMonitor {
         try {
             names = activeInterfaces();
         } catch (e) {
-            logError(e, 'cathud: could not enumerate network interfaces');
+            logError(e, 'system-patrol: could not enumerate network interfaces');
             return {rx: 0, tx: 0, interfaces: [], ready: false};
         }
 

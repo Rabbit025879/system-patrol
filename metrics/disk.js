@@ -21,7 +21,7 @@ function mountPoints() {
             return [];
         text = new TextDecoder().decode(bytes);
     } catch (e) {
-        logError(e, 'cathud: could not read /proc/mounts');
+        logError(e, 'system-patrol: could not read /proc/mounts');
         return [];
     }
 

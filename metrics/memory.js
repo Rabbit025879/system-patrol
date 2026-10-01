@@ -13,7 +13,7 @@ export function readMemory() {
             return null;
         text = new TextDecoder().decode(bytes);
     } catch (e) {
-        logError(e, 'cathud: could not read /proc/meminfo');
+        logError(e, 'system-patrol: could not read /proc/meminfo');
         return null;
     }
 

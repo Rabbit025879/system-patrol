@@ -24,7 +24,7 @@ function comboFor(settings, key, keys, labels, title, subtitle) {
     return row;
 }
 
-export default class CatHudPreferences extends ExtensionPreferences {
+export default class SystemPatrolPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const page = new Adw.PreferencesPage();

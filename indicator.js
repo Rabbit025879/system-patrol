@@ -6,7 +6,7 @@ import St from 'gi://St';
 
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
-import {CatHud} from './hud.js';
+import {PatrolHud} from './hud.js';
 import {greetingFor, activityFor, formatCustom, ROTATE_SECONDS} from './phrases.js';
 import {CpuMonitor} from './metrics/cpu.js';
 import {readMemory} from './metrics/memory.js';
@@ -34,12 +34,12 @@ const TYPE_INTERVAL_MS = 80;
 
 const COLOR_TEXT = '#d7dae0';
 
-export const CatHudIndicator = GObject.registerClass(
-class CatHudIndicator extends PanelMenu.Button {
+export const PatrolIndicator = GObject.registerClass(
+class PatrolIndicator extends PanelMenu.Button {
     _init(extensionPath, settings) {
         // menuAlignment 0, no menu: clicking toggles the HUD instead of
         // dropping a standard popup.
-        super._init(0.0, 'Cat HUD', true);
+        super._init(0.0, 'System Patrol', true);
 
         this._settings = settings;
         this._cpu = new CpuMonitor();
@@ -67,7 +67,7 @@ class CatHudIndicator extends PanelMenu.Button {
         });
         this.add_child(this._label);
 
-        this._hud = new CatHud(extensionPath, settings);
+        this._hud = new PatrolHud(extensionPath, settings);
         this._hud.setStatic(this._static);
         this._hud.connect('closed', () => {
             this.remove_style_pseudo_class('active');

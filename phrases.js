@@ -5,7 +5,7 @@
 // branding. These are the default.
 //
 // ACTIVITY is the alternative: a line tied to how hard the machine is working,
-// using the same thresholds as catIcon's animation tiers so the words and the
+// using the same thresholds as mascotIcon's animation tiers so the words and the
 // mascot's gait always agree.
 
 const GREETINGS = [

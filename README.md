@@ -1,4 +1,4 @@
-# Cat HUD
+# System Patrol
 
 A GNOME Shell system monitor. The top bar stays to a single short line — the
 cat is napping, the raccoon is sprinting — and clicking it opens a floating HUD
@@ -64,13 +64,13 @@ can be turned off in preferences — everything else is local reads.
 ## Settings
 
 ```bash
-gnome-extensions prefs cathud@rabbit025879
+gnome-extensions prefs system-patrol@rabbit025879
 ```
 
 Or from the command line:
 
 ```bash
-gsettings --schemadir ~/.local/share/gnome-shell/extensions/cathud@rabbit025879/schemas set org.gnome.shell.extensions.cathud mascot raccoon
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/system-patrol@rabbit025879/schemas set org.gnome.shell.extensions.system-patrol mascot raccoon
 ```
 
 ## Regenerating the sprites
