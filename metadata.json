@@ -2,6 +2,9 @@
   "uuid": "cathud@rabbit025879",
   "name": "Cat HUD",
   "description": "A floating system monitor HUD with a cat in the top bar that runs faster the busier the CPU gets.",
-  "shell-version": ["46"],
-  "url": ""
+  "shell-version": [
+    "46"
+  ],
+  "url": "",
+  "settings-schema": "org.gnome.shell.extensions.cathud"
 }

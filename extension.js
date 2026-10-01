@@ -5,7 +5,7 @@ import {CatHudIndicator} from './indicator.js';
 
 export default class CatHudExtension extends Extension {
     enable() {
-        this._indicator = new CatHudIndicator(this.path);
+        this._indicator = new CatHudIndicator(this.path, this.getSettings());
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 

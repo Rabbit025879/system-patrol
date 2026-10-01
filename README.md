@@ -1,9 +1,12 @@
 # Cat HUD
 
-A GNOME Shell system monitor. A pixel cat sits in the top bar next to live
+A GNOME Shell system monitor. A pixel animal sits in the top bar next to live
 CPU and RAM figures, and runs faster the busier the machine gets — curled up
 asleep under 5%, walking, trotting, then sprinting past 70%. Clicking it opens
 a floating HUD with the full breakdown.
+
+Two mascots ship with it, a **cat** and a **raccoon**, switchable in the
+extension's preferences. The swap applies immediately — no logout needed.
 
 ![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-46-4A86CF)
 ![Platform](https://img.shields.io/badge/Platform-Linux-FCC624)
@@ -37,18 +40,39 @@ gnome-extensions enable cathud@rabbit025879
 On Wayland the shell cannot be restarted in place, so log out and back in for
 code changes to take effect — GNOME caches extension modules for the session.
 
-## Regenerating the cat
+## Switching mascot
 
-The sprite is authored as ASCII art inside the generator, not hand-drawn, so it
-can always be retouched and rebuilt:
+```bash
+gnome-extensions prefs cathud@rabbit025879
+```
+
+Or straight from the command line:
+
+```bash
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/cathud@rabbit025879/schemas set org.gnome.shell.extensions.cathud mascot raccoon
+```
+
+## Regenerating the sprites
+
+Both mascots are authored as ASCII art inside the generator, not hand-drawn, so
+they can always be retouched and rebuilt:
 
 ```bash
 python3 tools/gen_frames.py
 ```
 
-This writes 12 frames × 2 moods × 5 sizes into `cat-assets/frames/`. Edit
-`BODY_ART`, `LEGS` or `SLEEP_ART` in the script to change the cat. Requires
-Pillow.
+This writes 12 frames × 2 moods × 5 sizes per mascot into `assets/frames/`.
+Edit the `*_ART`, `*_LEGS` and `*_SLEEP` blocks in the script to change them,
+and add an entry to `MASCOTS` (plus the gschema enum and `prefs.js`) to add a
+new animal. Requires Pillow.
+
+Two things that are easy to get wrong when drawing a new one, both learned the
+hard way here:
+
+- **Keep markings mid-tone.** A true raccoon-black reads perfectly on a light
+  panel and vanishes entirely into a dark one.
+- **Join the tail where the back slopes down.** Drawn any higher it separates
+  from the body and reads as loose dashes floating alongside the animal.
 
 ## A note on GNOME versions
 

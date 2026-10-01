@@ -24,7 +24,7 @@ const COLOR_TEXT = '#d7dae0';
 
 export const CatHudIndicator = GObject.registerClass(
 class CatHudIndicator extends PanelMenu.Button {
-    _init(extensionPath) {
+    _init(extensionPath, settings) {
         // menuAlignment 0, no menu: clicking toggles the HUD instead of
         // dropping a standard popup.
         super._init(0.0, 'Cat HUD', true);
@@ -37,7 +37,7 @@ class CatHudIndicator extends PanelMenu.Button {
         this._lastDiskPoll = 0;
 
         const box = new St.BoxLayout({vertical: false, style: 'spacing: 6px;'});
-        this._catIcon = new CatIcon(extensionPath);
+        this._catIcon = new CatIcon(extensionPath, settings);
         box.add_child(this._catIcon);
 
         // Monospace and a fixed width so the panel does not jitter as the

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <enum id="org.gnome.shell.extensions.cathud.mascot">
+    <value nick="cat" value="0"/>
+    <value nick="raccoon" value="1"/>
+  </enum>
+  <schema id="org.gnome.shell.extensions.cathud"
+          path="/org/gnome/shell/extensions/cathud/">
+    <key name="mascot" enum="org.gnome.shell.extensions.cathud.mascot">
+      <default>'cat'</default>
+      <summary>Panel mascot</summary>
+      <description>Which animal runs in the top bar.</description>
+    </key>
+  </schema>
+</schemalist>

@@ -44,7 +44,7 @@ function runIntervalForPercent(percent) {
 
 export const CatIcon = GObject.registerClass(
 class CatIcon extends St.DrawingArea {
-    _init(extensionPath) {
+    _init(extensionPath, settings) {
         super._init({
             style_class: 'system-status-icon',
             reactive: false,
@@ -55,7 +55,18 @@ class CatIcon extends St.DrawingArea {
         // Frames are decoded lazily per mood on first use, since a machine that
         // never idles below 5% never needs the sleep set.
         this._extensionPath = extensionPath;
+        this._settings = settings;
+        this._mascot = settings.get_string('mascot');
         this._surfaces = {};
+
+        // Switching mascot drops every decoded frame and repaints, so the swap
+        // takes effect immediately rather than at the next login.
+        this._mascotChangedId = settings.connect('changed::mascot', () => {
+            this._mascot = settings.get_string('mascot');
+            this._cleanupSurfaces();
+            this._frameIndex = 0;
+            this.queue_repaint();
+        });
 
         this._mood = MOOD_SLEEP;
         this._frameIndex = 0;
@@ -81,6 +92,8 @@ class CatIcon extends St.DrawingArea {
             this._cleanupSurfaces();
             if (this._lockedChangedId)
                 Main.screenShield.disconnect(this._lockedChangedId);
+            if (this._mascotChangedId)
+                this._settings.disconnect(this._mascotChangedId);
         });
 
         // Starts frozen on the sleeping pose until the first CPU sample lands.
@@ -96,8 +109,10 @@ class CatIcon extends St.DrawingArea {
         const surfaces = [];
         for (let i = 0; i < FRAME_COUNT; i++) {
             const n = i.toString().padStart(2, '0');
-            const path = GLib.build_filenamev(
-                [this._extensionPath, 'cat-assets', 'frames', mood, `${FRAME_SIZE}`, `cat-${n}.png`]);
+            const path = GLib.build_filenamev([
+                this._extensionPath, 'assets', 'frames', this._mascot, mood,
+                `${FRAME_SIZE}`, `frame-${n}.png`,
+            ]);
             try {
                 const surface = cairo.ImageSurface.createFromPNG(path);
                 // A failed decode still yields a surface object, just a
