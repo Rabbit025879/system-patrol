@@ -63,6 +63,16 @@ function colorFor(percent) {
     return COLOR_NORMAL;
 }
 
+// A battery reads the other way round from a load: full is good, empty is
+// the alarm. Run through colorFor it showed a fully charged battery in red.
+function batteryColor(percent) {
+    if (percent <= 15)
+        return COLOR_CRITICAL;
+    if (percent <= 30)
+        return COLOR_WARNING;
+    return COLOR_NORMAL;
+}
+
 export function formatBytes(bytes) {
     const units = ['B', 'K', 'M', 'G', 'T'];
     let value = bytes;
@@ -134,12 +144,13 @@ class Bar {
                 `background-color: ${COLOR_TRACK}; border-radius: ${BAR_HEIGHT / 2}px;`,
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
-            layout_manager: new Clutter.BinLayout(),
         });
-        this._fill = new St.Widget({
-            x_align: Clutter.ActorAlign.START,
-            y_align: Clutter.ActorAlign.FILL,
-        });
+        // The fill carries its own width and height and sits at the track's
+        // origin under the default fixed layout. It used to rely on a
+        // BinLayout stretching it to the track's height, but BinLayout ignores
+        // a child's alignment unless the child expands, so the fill was
+        // allocated at its natural height -- zero -- and never painted.
+        this._fill = new St.Widget();
         this.actor.add_child(this._fill);
         this.actor.connect('notify::width', () => this._apply());
     }
@@ -159,7 +170,8 @@ class Bar {
             ? Math.max(2, Math.round(width * this._percent / 100))
             : 0;
         this._fill.style =
-            `width: ${filled}px; background-color: ${this._color ?? colorFor(this._percent)};` +
+            `width: ${filled}px; height: ${BAR_HEIGHT}px;` +
+            `background-color: ${this._color ?? colorFor(this._percent)};` +
             `border-radius: ${BAR_HEIGHT / 2}px;`;
     }
 }
@@ -793,6 +805,7 @@ class CatHud extends St.BoxLayout {
             name: power.status === 'Full' ? 'Fully Charged' : power.status,
             percent: power.percent,
             trail: `${power.watts.toFixed(2)} W`,
+            barColor: batteryColor(power.percent),
         });
         // Time remaining only means something while running on the battery.
         const discharging = power.status === 'Discharging';
