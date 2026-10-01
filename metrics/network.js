@@ -137,7 +137,7 @@ export function readLinkInfo(onDone, cancellable = null) {
     runCommand(['ip', '-4', '-o', 'addr', 'show', 'scope', 'global'], cancellable, out => {
         if (out) {
             for (const line of out.split('\n')) {
-                // "3: wlp0s20f3    inet 192.168.0.92/24 brd ..."
+                // "3: wlan0    inet 192.168.1.20/24 brd ..."
                 const match = line.match(/^\d+:\s+(\S+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)/);
                 if (match && !isVirtual(match[1]))
                     result.addresses.push({iface: match[1], addr: match[2]});
