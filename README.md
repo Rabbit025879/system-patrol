@@ -74,17 +74,20 @@ gsettings --schemadir ~/.local/share/gnome-shell/extensions/cathud@rabbit025879/
 
 ## Regenerating the sprites
 
-Both mascots are authored as ASCII art inside the generator, not hand-drawn, so
-they can always be retouched and rebuilt:
+Both mascots are generated, not hand-drawn, so they can always be retuned and
+rebuilt:
 
 ```bash
 python3 tools/gen_frames.py
 ```
 
-This writes 12 frames × 2 moods × 5 sizes per mascot into `assets/frames/`.
-Edit the `*_ART`, `*_LEGS` and `*_SLEEP` blocks in the script to change them,
-and add an entry to `MASCOTS` (plus the gschema enum and `prefs.js`) to add a
-new animal. Requires Pillow.
+The mascot is a small skeletal rig — hip, shoulder, head, four two-segment
+legs and a tail — posed per frame on a 36×24 pixel grid, so the gallop, walk
+and sleep loops are tuned by editing `run_frame`, `walk_frame` and
+`sleep_frame` rather than redrawing sprites. It writes 12 frames × 3 moods per
+mascot into `assets/frames/`. Add `--preview DIR` to also get a looping GIF of
+each, which is the quickest way to judge a change. A new animal is an entry in
+`MASCOTS` plus the gschema enum and `prefs.js`. Requires Pillow.
 
 Two things that are easy to get wrong when drawing a new one, both learned the
 hard way here:

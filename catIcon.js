@@ -7,50 +7,48 @@ import cairo from 'gi://cairo';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const FRAME_COUNT = 12;
-// Every generated size is an exact integer multiple of the 16px art grid, so
-// drawing the 64px set through a NEAREST filter lands on whole source pixels
-// at 32px and stays crisp at the sizes in between.
-const FRAME_SIZE = 64;
-// Default when no size is given. The mascot now lives in the HUD, where it
-// can afford to be much larger than a top-bar icon.
-const ICON_SIZE = 28;
+// The art is drawn on a 36x24 grid (see tools/gen_frames.py) and shipped at
+// 6x. Showing it at 3x keeps every art pixel a whole number of screen pixels
+// at both 1x and 2x display scaling.
+const GRID_WIDTH = 36;
+const GRID_HEIGHT = 24;
+const DISPLAY_SCALE = 3;
 
-const MOOD_RUN = 'run';
 const MOOD_SLEEP = 'sleep';
-const MOODS = [MOOD_RUN, MOOD_SLEEP];
+const MOOD_WALK = 'walk';
+const MOOD_RUN = 'run';
+const MOODS = [MOOD_SLEEP, MOOD_WALK, MOOD_RUN];
 
-// Below this the machine is effectively idle and the cat curls up.
+// Below this the machine is effectively idle and the mascot curls up.
 const SLEEP_MAX_PERCENT = 5;
 const WALK_MAX_PERCENT = 30;
 const TROT_MAX_PERCENT = 70;
 
-const RUN_INTERVAL_MS = {
-    walk: 220,
-    trot: 110,
-    sprint: 60,
-};
-const SLEEP_INTERVAL_MS = 400;
+// Milliseconds per frame; each loop is twelve frames. The gallop has two
+// speeds so a busy machine and a flat-out one do not look the same.
+const SLEEP_INTERVAL_MS = 260;
+const WALK_INTERVAL_MS = 100;
+const TROT_INTERVAL_MS = 70;
+const SPRINT_INTERVAL_MS = 42;
 
-function moodFor(cpuPercent) {
-    return cpuPercent < SLEEP_MAX_PERCENT ? MOOD_SLEEP : MOOD_RUN;
-}
-
-function runIntervalForPercent(percent) {
-    if (percent <= WALK_MAX_PERCENT)
-        return RUN_INTERVAL_MS.walk;
-    if (percent <= TROT_MAX_PERCENT)
-        return RUN_INTERVAL_MS.trot;
-    return RUN_INTERVAL_MS.sprint;
+function stateFor(cpuPercent) {
+    if (cpuPercent < SLEEP_MAX_PERCENT)
+        return {mood: MOOD_SLEEP, interval: SLEEP_INTERVAL_MS};
+    if (cpuPercent <= WALK_MAX_PERCENT)
+        return {mood: MOOD_WALK, interval: WALK_INTERVAL_MS};
+    if (cpuPercent <= TROT_MAX_PERCENT)
+        return {mood: MOOD_RUN, interval: TROT_INTERVAL_MS};
+    return {mood: MOOD_RUN, interval: SPRINT_INTERVAL_MS};
 }
 
 export const CatIcon = GObject.registerClass(
 class CatIcon extends St.DrawingArea {
-    _init(extensionPath, settings, size = ICON_SIZE) {
+    _init(extensionPath, settings) {
         super._init({
             reactive: false,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this.set_size(size, size);
+        this.set_size(GRID_WIDTH * DISPLAY_SCALE, GRID_HEIGHT * DISPLAY_SCALE);
 
         // Frames are decoded lazily per mood on first use, since a machine that
         // never idles below 5% never needs the sleep set.
@@ -111,7 +109,7 @@ class CatIcon extends St.DrawingArea {
             const n = i.toString().padStart(2, '0');
             const path = GLib.build_filenamev([
                 this._extensionPath, 'assets', 'frames', this._mascot, mood,
-                `${FRAME_SIZE}`, `frame-${n}.png`,
+                `frame-${n}.png`,
             ]);
             try {
                 const surface = cairo.ImageSurface.createFromPNG(path);
@@ -128,10 +126,7 @@ class CatIcon extends St.DrawingArea {
 
     // cpuPercent is the current total CPU utilization (0-100).
     setCpu(cpuPercent) {
-        const mood = moodFor(cpuPercent);
-        const interval = mood === MOOD_SLEEP
-            ? SLEEP_INTERVAL_MS
-            : runIntervalForPercent(cpuPercent);
+        const {mood, interval} = stateFor(cpuPercent);
 
         if (mood !== this._mood) {
             this._mood = mood;
@@ -206,14 +201,13 @@ class CatIcon extends St.DrawingArea {
             return;
         }
 
-        const resourceScale = this.get_resource_scale();
-        const imgWidth = image.getWidth() / resourceScale;
-        const imgHeight = image.getHeight() / resourceScale;
-        const scale = Math.min(surfaceWidth / imgWidth, surfaceHeight / imgHeight);
+        // Fit the frame to whatever surface we were given, preserving aspect.
+        const scale = Math.min(
+            surfaceWidth / image.getWidth(), surfaceHeight / image.getHeight());
 
         cr.translate(
-            (surfaceWidth - imgWidth * scale) / 2,
-            (surfaceHeight - imgHeight * scale) / 2);
+            (surfaceWidth - image.getWidth() * scale) / 2,
+            (surfaceHeight - image.getHeight() * scale) / 2);
         cr.scale(scale, scale);
 
         cr.setSourceSurface(image, 0, 0);
