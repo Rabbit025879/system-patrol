@@ -2,6 +2,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 const MOUNTS_PATH = '/proc/mounts';
+const ESP_PATH = '/boot/efi';
 const FS_ATTRS = 'filesystem::size,filesystem::used,filesystem::free';
 
 // Pseudo and virtual filesystems have no meaningful capacity, and listing every
@@ -35,6 +36,9 @@ function mountPoints() {
         // (nfs, cifs, sshfs), which is what makes the query safe to run.
         if (SKIP_TYPES.has(type) || !device.startsWith('/dev/'))
             continue;
+        // The EFI system partition is boot plumbing, not space anyone manages.
+        if (rawTarget === ESP_PATH)
+            continue;
 
         // /proc/mounts octal-escapes spaces and friends in the mount path.
         const target = rawTarget.replace(/\\(\d{3})/g,
@@ -49,6 +53,13 @@ function mountPoints() {
     return points;
 }
 
+// Removable and auto-mounted volumes live at /media/<user>/<label>, a path far
+// too long for the name column; the volume label alone says what it is.
+function displayName(path) {
+    const match = path.match(/^(?:\/run)?\/media\/[^/]+\/(.+)$/);
+    return match ? match[1] : path;
+}
+
 function parseInfo(path, info) {
     const size = info.get_attribute_uint64('filesystem::size');
     if (!size)
@@ -57,7 +68,7 @@ function parseInfo(path, info) {
     const free = info.get_attribute_uint64('filesystem::free');
     const used = info.get_attribute_uint64('filesystem::used') ||
         Math.max(0, size - free);
-    return {path, size, used, free, percent: (used / size) * 100};
+    return {path, name: displayName(path), size, used, free, percent: (used / size) * 100};
 }
 
 // Deliberately callback-based rather than promise-based. A promise resolved

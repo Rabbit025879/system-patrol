@@ -786,7 +786,7 @@ class PatrolHud extends St.BoxLayout {
 
         disks.forEach((disk, i) => {
             this._diskRows[i].update({
-                name: disk.path,
+                name: disk.name,
                 percent: disk.percent,
                 value: `${formatBytes(disk.used)} / ${formatBytes(disk.size)}`,
                 trail: `Free ${formatBytes(disk.free)}`,
