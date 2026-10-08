@@ -193,6 +193,12 @@ class MetricRow {
         this.actor.add_child(this._dot);
 
         this._name = label(name, `width: ${nameWidth}px;`);
+        this._tooltipText = '';
+        this._tooltip = null;
+        this._name.reactive = true;
+        this._name.track_hover = true;
+        this._name.connect('notify::hover', () => this._syncTooltip());
+        this._name.connect('destroy', () => this._hideTooltip());
         this._value = label('',
             `width: ${valueWidth}px; color: ${COLOR_MUTED}; font-size: ${FONT_SMALL}px;`);
         this._bar = new Bar(barWidth);
@@ -213,9 +219,36 @@ class MetricRow {
         }
     }
 
-    update({percent = 0, value = '', trail = '', name = null, dotColor = null, barColor = null}) {
+    // Shows the full text next to the name, but only when the name column had
+    // to ellipsize it; a name that fits needs no help.
+    _syncTooltip() {
+        const ellipsized = this._name.clutter_text.get_layout().is_ellipsized();
+        if (!this._name.hover || !ellipsized || !this._tooltipText) {
+            this._hideTooltip();
+            return;
+        }
+        if (!this._tooltip) {
+            this._tooltip = new St.Label({
+                text: this._tooltipText,
+                style: `${MONO} color: ${COLOR_TEXT}; font-size: ${FONT_SMALL}px; ` +
+                    `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER}; ` +
+                    'border-radius: 6px; padding: 4px 8px;',
+            });
+            Main.uiGroup.add_child(this._tooltip);
+        }
+        const [x, y] = this._name.get_transformed_position();
+        this._tooltip.set_position(Math.round(x), Math.round(y + this._name.height + 4));
+    }
+
+    _hideTooltip() {
+        this._tooltip?.destroy();
+        this._tooltip = null;
+    }
+
+    update({percent = 0, value = '', trail = '', name = null, tooltip = '', dotColor = null, barColor = null}) {
         if (name !== null)
             this._name.text = name;
+        this._tooltipText = tooltip;
         if (dotColor)
             this._dot.style =
                 `width: 9px; height: 9px; border-radius: 5px; background-color: ${dotColor};`;
@@ -787,6 +820,7 @@ class PatrolHud extends St.BoxLayout {
         disks.forEach((disk, i) => {
             this._diskRows[i].update({
                 name: disk.name,
+                tooltip: disk.path,
                 percent: disk.percent,
                 value: `${formatBytes(disk.used)} / ${formatBytes(disk.size)}`,
                 trail: `Free ${formatBytes(disk.free)}`,
