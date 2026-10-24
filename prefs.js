@@ -50,7 +50,7 @@ export default class SystemPatrolPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         // Drops the default marker's number clear of the slider knob.
         const css = new Gtk.CssProvider();
-        css.load_from_string('.glass-slider marks.bottom { margin-top: 10px; }');
+        css.load_from_string('.glass-slider marks.bottom label { margin-top: 10px; }');
         Gtk.StyleContext.add_provider_for_display(
             window.get_display(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
 
