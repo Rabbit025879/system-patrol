@@ -5,6 +5,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {GlassEffect} from './glassEffect.js';
 import {MascotIcon} from './mascotIcon.js';
 
 // NOTE: this extension targets GNOME Shell 46, where St.BoxLayout takes a
@@ -26,6 +27,8 @@ const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
 
 // Settings keys that shape the glass; each is an integer percentage.
 const GLASS_KEYS = ['glass-tint', 'glass-blur', 'glass-brightness', 'glass-edge'];
+
+const GLASS_RADIUS = 22;
 
 const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
@@ -371,6 +374,15 @@ class PatrolHud extends St.BoxLayout {
             this._blur = null;
         }
 
+        this._shape = null;
+        try {
+            this._shape = new GlassEffect({radius: GLASS_RADIUS});
+            this.add_effect_with_name('glass-shape', this._shape);
+        } catch (e) {
+            console.warn(`System Patrol: glass shader unavailable: ${e.message}`);
+            this._shape = null;
+        }
+
         this._applyGlass(settings);
         const glassIds = GLASS_KEYS.map(
             key => settings.connect(`changed::${key}`, () => this._applyGlass(settings)));
@@ -429,20 +441,17 @@ class PatrolHud extends St.BoxLayout {
         });
     }
 
-    // Avatar and machine identity on the left, the mascot on the right: the
-    // animation lives here rather than in the top bar, which keeps the panel
-    // to a single line of text.
-    // Liquid glass: a light tint over a blurred backdrop, a bright rim, and an
-    // inner highlight along the top edge.
+    // Liquid glass: a light tint over a blurred backdrop. The shader draws the
+    // rounded mask and the lit rim; the CSS rim is only the fallback without it.
     _applyGlass(settings) {
         const tint = settings.get_int('glass-tint') / 100;
         const edge = settings.get_int('glass-edge') / 100;
         this.style = `background-color: rgba(44, 50, 60, ${tint});` +
-            `border: 1px solid rgba(255, 255, 255, ${edge});` +
-            'border-radius: 22px; padding: 20px 26px 24px 26px;' +
-            `box-shadow: inset 0 1px 0 rgba(255, 255, 255, ${Math.min(1, edge + 0.07)}),` +
-            `inset 0 -1px 0 rgba(255, 255, 255, ${edge / 4}),` +
-            '0 10px 30px rgba(0, 0, 0, 0.35);';
+            `border-radius: ${GLASS_RADIUS}px; padding: 20px 26px 24px 26px;` +
+            (this._shape ? '' : `border: 1px solid rgba(255, 255, 255, ${edge});`);
+
+        if (this._shape)
+            this._shape.edge = edge;
 
         if (this._blur) {
             const radius = settings.get_int('glass-blur');
@@ -453,6 +462,9 @@ class PatrolHud extends St.BoxLayout {
         }
     }
 
+    // Avatar and machine identity on the left, the mascot on the right: the
+    // animation lives here rather than in the top bar, which keeps the panel
+    // to a single line of text.
     _buildHeader(extensionPath, settings) {
         const header = new St.BoxLayout({vertical: false, style: 'spacing: 14px;'});
 
