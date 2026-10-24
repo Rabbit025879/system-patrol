@@ -106,7 +106,7 @@ class PatrolIndicator extends PanelMenu.Button {
             return;
         }
         this.add_style_pseudo_class('active');
-        this._hud.open();
+        this._hud.open(this);
         this._setInterval(OPEN_INTERVAL_MS);
         // Populate immediately rather than making the user wait a full tick.
         this._tick();
