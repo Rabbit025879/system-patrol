@@ -54,6 +54,41 @@ kernel with no subprocess at all.
 Disks, network addresses, GPU counters and the public IP are only polled while
 the HUD is on screen, and each on its own slower cadence.
 
+The HUD grows out of the top bar button with a soft overshoot and shrinks back
+into it on close. The built-in glass skips the animation, see below.
+
+## Background
+
+Preferences → **Glass** → **Background** picks how the HUD is drawn:
+
+- **System theme** (default) — the HUD is styled like a popup menu, so your
+  shell theme decides its background, border and rounded corners. A blur
+  extension that blurs popups, such as [Blur My Shell](https://github.com/aunetx/blur-my-shell),
+  picks it up with no setup, rounded corners and its own pipelines included.
+  The tint and blur sliders do nothing in this mode.
+- **Built-in glass** — a translucent tint over a backdrop blur drawn by this
+  extension, with three sliders, each with a tick marking its default:
+  **Tint**, **Blur** (0 turns it off) and **Backdrop brightness**. Changes
+  apply live.
+- **Solid** — a plain dark panel.
+
+The mode applies the next time the HUD opens.
+
+The built-in glass has some limits that come from the Shell's own blur:
+
+- **Square corners.** The blur always fills the HUD's whole rectangle and
+  cannot follow a rounded corner, so the glass is square so that tint and blur
+  line up. Use *System theme* with a blur extension if you want rounded ones.
+- **No open animation.** The blur samples the screen behind the HUD, and a HUD
+  that fades or moves while it opens makes that sample flash. It stays hidden
+  until it has been placed, then appears at once.
+- **A little GPU work.** The blur is redrawn whenever the HUD updates, so it
+  costs a GPU pass per frame while the HUD is open. Nothing runs while it is
+  closed.
+
+The text is a light colour with a soft dark halo so it stays readable over a
+bright background.
+
 ## Top bar
 
 One line, typed out character by character, in four modes:
@@ -87,6 +122,19 @@ Or from the command line:
 ```bash
 gsettings --schemadir ~/.local/share/gnome-shell/extensions/system-patrol@rabbit025879/schemas set org.gnome.shell.extensions.system-patrol mascot raccoon
 ```
+
+| Key | Values | Default |
+| --- | --- | --- |
+| `mascot` | `cat`, `raccoon` | `cat` |
+| `panel-mode` | `greeting`, `activity`, `stats`, `custom` | `greeting` |
+| `panel-custom-text` | text with `{cpu}` `{ram}` `{mascot}` `{host}` | `🐇 TuTzuOS · {cpu}%` |
+| `show-public-ip` | `true`, `false` | `true` |
+| `glass-mode` | `system`, `glass`, `solid` | `system` |
+| `glass-tint` | 0–100 | `30` |
+| `glass-blur` | 0–100 | `30` |
+| `glass-brightness` | 0–100 | `85` |
+
+After editing the schema, recompile it with `glib-compile-schemas schemas`.
 
 ## Regenerating the sprites
 
