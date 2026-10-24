@@ -10,6 +10,10 @@
     <value nick="stats" value="2"/>
     <value nick="custom" value="3"/>
   </enum>
+  <enum id="org.gnome.shell.extensions.system-patrol.glassengine">
+    <value nick="builtin" value="0"/>
+    <value nick="blur-my-shell" value="1"/>
+  </enum>
   <schema id="org.gnome.shell.extensions.system-patrol"
           path="/org/gnome/shell/extensions/system-patrol/">
     <key name="mascot" enum="org.gnome.shell.extensions.system-patrol.mascot">
@@ -36,6 +40,11 @@
       <default>true</default>
       <summary>Liquid glass background</summary>
       <description>Draws the HUD as translucent blurred glass. Off gives a solid dark panel.</description>
+    </key>
+    <key name="glass-engine" enum="org.gnome.shell.extensions.system-patrol.glassengine">
+      <default>'builtin'</default>
+      <summary>Glass blur provider</summary>
+      <description>Use this extension's own blur, or let Blur My Shell blur the HUD like a popup menu. Falls back to the built-in blur when Blur My Shell is not running.</description>
     </key>
     <key name="glass-tint" type="i">
       <range min="0" max="100"/>
