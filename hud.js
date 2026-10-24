@@ -722,16 +722,25 @@ class PatrolHud extends St.BoxLayout {
         this._userMoved = false;
         this._centre();
 
-        // The slide runs on translation_y, not y, so it cannot fight the
-        // centring that _centre does through set_position.
-        this.opacity = 0;
-        this.translation_y = -12;
-        this.ease({
-            opacity: 255,
-            translation_y: 0,
-            duration: 180,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
+        if (this._blur?.enabled) {
+            // The blur samples the screen behind the HUD, so a HUD that fades
+            // in or slides, or that is painted before it has been centred,
+            // blurs the wrong pixels for a frame and flashes. It stays
+            // invisible until _centre has placed it, then appears at once.
+            this.opacity = 0;
+            this._revealOnCentre = true;
+        } else {
+            // The slide runs on translation_y, not y, so it cannot fight the
+            // centring that _centre does through set_position.
+            this.opacity = 0;
+            this.translation_y = -12;
+            this.ease({
+                opacity: 255,
+                translation_y: 0,
+                duration: 180,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        }
 
         this.grab_key_focus();
     }
@@ -755,6 +764,11 @@ class PatrolHud extends St.BoxLayout {
         this.set_position(
             monitor.x + Math.floor((monitor.width - width) / 2),
             monitor.y + Math.floor((monitor.height - height) / 2));
+
+        if (this._revealOnCentre) {
+            this._revealOnCentre = false;
+            this.opacity = 255;
+        }
     }
 
     close() {
@@ -766,6 +780,7 @@ class PatrolHud extends St.BoxLayout {
         // translation_y parked off zero, offsetting the next open.
         this.remove_all_transitions();
         this.translation_y = 0;
+        this._revealOnCentre = false;
 
         if (this._backdrop) {
             Main.layoutManager.removeChrome(this._backdrop);
