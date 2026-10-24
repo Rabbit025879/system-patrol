@@ -50,11 +50,5 @@
       <summary>Glass brightness</summary>
       <description>Brightness of the blurred backdrop, in percent.</description>
     </key>
-    <key name="glass-edge" type="i">
-      <range min="0" max="100"/>
-      <default>38</default>
-      <summary>Glass edge</summary>
-      <description>Opacity of the bright rim around the HUD, in percent.</description>
-    </key>
   </schema>
 </schemalist>
