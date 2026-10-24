@@ -26,15 +26,14 @@ const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
 const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
 
 // Settings keys that shape the glass; each is an integer percentage.
-const GLASS_KEYS = ['glass-enabled', 'glass-engine', 'glass-tint', 'glass-blur', 'glass-brightness'];
+const GLASS_KEYS = ['glass-mode', 'glass-tint', 'glass-blur', 'glass-brightness'];
 
 const GLASS_RADIUS = 22;
 
-// Blur My Shell blurs any chrome actor carrying one of its popup style
-// classes, so this one makes it treat the HUD like a popup menu.
-const BMS_UUID = 'blur-my-shell@aunetx';
-const BMS_STYLE_CLASS = 'popup-menu-content';
-const EXTENSION_STATE_ACTIVE = 1;
+// Shell themes, and blur extensions such as Blur My Shell, style and blur
+// chrome actors carrying the popup classes, so this one makes the HUD follow
+// them.
+const SYSTEM_STYLE_CLASS = 'popup-menu-content';
 
 const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
@@ -450,42 +449,43 @@ class PatrolHud extends St.BoxLayout {
     // Liquid glass: a light tint over a blurred backdrop, masked to rounded
     // corners by the shader. With the glass off it is a plain dark panel.
     _applyGlass(settings) {
-        const glass = settings.get_boolean('glass-enabled');
-        const external = glass && settings.get_string('glass-engine') === 'blur-my-shell' &&
-            Main.extensionManager.lookup(BMS_UUID)?.state === EXTENSION_STATE_ACTIVE;
+        const mode = settings.get_string('glass-mode');
+        const system = mode === 'system';
+        const glass = mode === 'glass';
 
-        // Blur My Shell looks for the class when the HUD is added to the
-        // stage, so a change made while it is open applies from the next open.
-        if (external)
-            this.add_style_class_name(BMS_STYLE_CLASS);
+        // Themes and blur extensions look for the class when the HUD is added
+        // to the stage, so a change made while it is open applies from the
+        // next open.
+        if (system)
+            this.add_style_class_name(SYSTEM_STYLE_CLASS);
         else
-            this.remove_style_class_name(BMS_STYLE_CLASS);
+            this.remove_style_class_name(SYSTEM_STYLE_CLASS);
 
-        if (glass) {
+        const padding = 'padding: 20px 26px 24px 26px;';
+        if (system) {
+            // Background, border, radius and shadow all come from the theme.
+            this.style = padding;
+        } else if (glass) {
             const tint = settings.get_int('glass-tint') / 100;
-            // The popup class brings its own border and shadow with it.
             this.style = `background-color: rgba(44, 50, 60, ${tint});` +
-                `border-radius: ${GLASS_RADIUS}px; padding: 20px 26px 24px 26px;` +
-                (external ? 'border: none; box-shadow: none;' : '');
+                `border-radius: ${GLASS_RADIUS}px; ${padding}`;
         } else {
             this.style = `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER};` +
-                'border-radius: 18px; padding: 20px 26px 24px 26px;' +
+                `border-radius: 18px; ${padding}` +
                 'box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);';
         }
 
         // The shader would clip the box-shadow, and both effects cost a
-        // GPU pass per frame, so neither runs on the solid panel or when
-        // Blur My Shell does the work.
-        const builtin = glass && !external;
+        // GPU pass per frame, so they only run for the built-in glass.
         if (this._shape)
-            this._shape.enabled = builtin;
+            this._shape.enabled = glass;
 
         if (this._blur) {
             const radius = settings.get_int('glass-blur');
             this._blur.radius = radius;
             this._blur.brightness = settings.get_int('glass-brightness') / 100;
             // A zero radius would still pay for the offscreen pass.
-            this._blur.enabled = builtin && radius > 0;
+            this._blur.enabled = glass && radius > 0;
         }
     }
 

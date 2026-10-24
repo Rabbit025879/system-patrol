@@ -8,8 +8,8 @@ const MASCOT_KEYS = ['cat', 'raccoon'];
 const MASCOT_LABELS = ['Cat', 'Raccoon'];
 
 // Index order has to match the enum nicks in the gschema.
-const ENGINE_KEYS = ['builtin', 'blur-my-shell'];
-const ENGINE_LABELS = ['Built-in', 'Blur My Shell'];
+const GLASS_KEYS = ['system', 'glass', 'solid'];
+const GLASS_LABELS = ['System theme', 'Built-in glass', 'Solid'];
 
 const PANEL_KEYS = ['greeting', 'activity', 'stats', 'custom'];
 const PANEL_LABELS = ['Greetings', 'Activity', 'CPU / RAM figures', 'Custom text'];
@@ -22,8 +22,8 @@ function sliderFor(settings, key, title, subtitle) {
     scale.set_valign(Gtk.Align.CENTER);
     scale.set_size_request(220, -1);
     scale.set_draw_value(true);
-    // Above the track, so the default marker below it cannot cover the value.
-    scale.set_value_pos(Gtk.PositionType.TOP);
+    scale.add_css_class('glass-slider');
+    scale.set_value_pos(Gtk.PositionType.RIGHT);
     // A tick under the default, so a tweaked slider can be put back by eye.
     const fallback = settings.get_default_value(key).get_int32();
     scale.add_mark(fallback, Gtk.PositionType.BOTTOM, `${fallback}`);
@@ -48,6 +48,12 @@ function comboFor(settings, key, keys, labels, title, subtitle) {
 
 export default class SystemPatrolPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
+        // Drops the default marker's number clear of the slider knob.
+        const css = new Gtk.CssProvider();
+        css.load_from_string('.glass-slider marks.bottom { margin-top: 10px; }');
+        Gtk.StyleContext.add_provider_for_display(
+            window.get_display(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+
         const settings = this.getSettings();
         const page = new Adw.PreferencesPage();
 
@@ -64,41 +70,26 @@ export default class SystemPatrolPreferences extends ExtensionPreferences {
             title: 'Glass',
             description: 'The liquid glass look of the HUD. Changes apply live.',
         });
-        const glassOn = new Adw.SwitchRow({
-            title: 'Liquid glass',
-            subtitle: 'Off gives a solid dark panel and skips the blur',
-            active: settings.get_boolean('glass-enabled'),
-        });
-        glassOn.connect('notify::active',
-            () => settings.set_boolean('glass-enabled', glassOn.active));
-        glass.add(glassOn);
+        const mode = comboFor(settings, 'glass-mode', GLASS_KEYS, GLASS_LABELS,
+            'Background',
+            'System theme follows your shell theme, and any blur extension on it, ' +
+            'and applies the next time the HUD opens');
+        glass.add(mode);
 
-        const engine = comboFor(settings, 'glass-engine', ENGINE_KEYS, ENGINE_LABELS,
-            'Blur provider',
-            'Blur My Shell follows its popup settings; Built-in uses the sliders below. ' +
-            'Blur My Shell needs to be enabled, and applies the next time the HUD opens');
-        glass.add(engine);
-
-        const tint = sliderFor(settings, 'glass-tint', 'Tint', 'Lower is clearer glass');
-        const builtinOnly = [
+        const glassRows = [
+            sliderFor(settings, 'glass-tint', 'Tint', 'Lower is clearer glass'),
             sliderFor(settings, 'glass-blur', 'Blur', 'Set to 0 to turn the blur off'),
             sliderFor(settings, 'glass-brightness', 'Backdrop brightness',
                 'How bright the blurred background is'),
         ];
-        glass.add(tint);
-        builtinOnly.forEach(row => glass.add(row));
+        glassRows.forEach(row => glass.add(row));
 
-        // Controls mean nothing while the glass is off, and the blur ones
-        // are Blur My Shell's to set when it provides the blur.
+        // The sliders only shape the built-in glass.
         const syncControls = () => {
-            const on = glassOn.active;
-            const own = settings.get_string('glass-engine') === 'builtin';
-            engine.set_sensitive(on);
-            tint.set_sensitive(on);
-            builtinOnly.forEach(row => row.set_sensitive(on && own));
+            const own = settings.get_string('glass-mode') === 'glass';
+            glassRows.forEach(row => row.set_sensitive(own));
         };
-        glassOn.connect('notify::active', syncControls);
-        engine.connect('notify::selected', syncControls);
+        mode.connect('notify::selected', syncControls);
         syncControls();
         page.add(glass);
 
