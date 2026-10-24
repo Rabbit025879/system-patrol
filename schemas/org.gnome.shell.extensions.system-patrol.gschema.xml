@@ -10,9 +10,10 @@
     <value nick="stats" value="2"/>
     <value nick="custom" value="3"/>
   </enum>
-  <enum id="org.gnome.shell.extensions.system-patrol.glassengine">
-    <value nick="builtin" value="0"/>
-    <value nick="blur-my-shell" value="1"/>
+  <enum id="org.gnome.shell.extensions.system-patrol.glassmode">
+    <value nick="system" value="0"/>
+    <value nick="glass" value="1"/>
+    <value nick="solid" value="2"/>
   </enum>
   <schema id="org.gnome.shell.extensions.system-patrol"
           path="/org/gnome/shell/extensions/system-patrol/">
@@ -36,15 +37,10 @@
       <summary>Show public IP</summary>
       <description>Fetches the public address from api.ipify.org. This is the only part of the HUD that leaves the machine.</description>
     </key>
-    <key name="glass-enabled" type="b">
-      <default>true</default>
-      <summary>Liquid glass background</summary>
-      <description>Draws the HUD as translucent blurred glass. Off gives a solid dark panel.</description>
-    </key>
-    <key name="glass-engine" enum="org.gnome.shell.extensions.system-patrol.glassengine">
-      <default>'blur-my-shell'</default>
-      <summary>Glass blur provider</summary>
-      <description>Let Blur My Shell blur the HUD like a popup menu, so it follows its popup settings, or use this extension's own blur. Falls back to the built-in blur when Blur My Shell is not running.</description>
+    <key name="glass-mode" enum="org.gnome.shell.extensions.system-patrol.glassmode">
+      <default>'system'</default>
+      <summary>HUD background</summary>
+      <description>system: styled like a popup menu by your shell theme, so a blur extension such as Blur My Shell can pick it up. glass: this extension's own tinted, blurred glass. solid: a plain dark panel.</description>
     </key>
     <key name="glass-tint" type="i">
       <range min="0" max="100"/>
