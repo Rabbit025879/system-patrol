@@ -6,7 +6,6 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {GenieEffect} from './genieEffect.js';
 import {MascotIcon} from './mascotIcon.js';
 
 // NOTE: this extension targets GNOME Shell 46, where St.BoxLayout takes a
@@ -34,10 +33,15 @@ const GLASS_KEYS = ['glass-mode', 'glass-tint', 'glass-blur', 'glass-brightness'
 // them.
 const SYSTEM_STYLE_CLASS = 'popup-menu-content';
 
-// The HUD comes out of the top bar button like a genie from a bottle, and
-// goes back in the same way on close.
-const GENIE_OPEN_MS = 420;
-const GENIE_CLOSE_MS = 260;
+// The HUD comes out of the top bar button like a genie from a bottle: a thin
+// sliver stretches down from the button, then spreads sideways to full width,
+// and the close plays it in reverse. It only uses scale, so a blur extension
+// that follows the HUD's transformed size, such as Blur My Shell, stays in step.
+const GENIE_START_SCALE = 0.05;
+const GENIE_STRETCH_MS = 320;
+const GENIE_SPREAD_MS = 420;
+const GENIE_SPREAD_DELAY_MS = 90;
+const GENIE_FADE_MS = 120;
 
 // How long a blurred HUD stays hidden after being placed, in milliseconds.
 const REVEAL_DELAY_MS = 150;
@@ -789,63 +793,76 @@ class PatrolHud extends St.BoxLayout {
         }
     }
 
-    // Runs the genie warp, forward to open or backward to close. The actor is
-    // moved along with it so the pinched top starts on the origin button.
-    _runGenie(opening, onDone) {
-        this._stopGenie();
-
-        const effect = new GenieEffect();
-        this._genie = effect;
-        this.add_effect_with_name('genie', effect);
-
-        let dx = 0;
-        let dy = 0;
-        if (this._origin) {
-            const [ox, oy] = this._origin.get_transformed_position();
-            const [ow, oh] = this._origin.get_transformed_size();
-            dx = ox + ow / 2 - (this.x + this.width / 2);
-            dy = oy + oh - this.y;
+    // Scales about the button the HUD comes out of, so every point of it
+    // converges on the button as the scale shrinks.
+    _pivotToOrigin() {
+        if (!this._origin || this.width <= 0 || this.height <= 0) {
+            this.set_pivot_point(0.5, 0);
+            return;
         }
-
-        const timeline = new Clutter.Timeline({
-            actor: this,
-            duration: opening ? GENIE_OPEN_MS : GENIE_CLOSE_MS,
-            progress_mode: opening
-                ? Clutter.AnimationMode.EASE_OUT_CUBIC
-                : Clutter.AnimationMode.EASE_IN_CUBIC,
-            direction: opening
-                ? Clutter.TimelineDirection.FORWARD
-                : Clutter.TimelineDirection.BACKWARD,
-        });
-        this._genieTimeline = timeline;
-
-        const apply = () => {
-            const progress = timeline.get_progress();
-            effect.progress = progress;
-            this.translation_x = dx * (1 - progress);
-            this.translation_y = dy * (1 - progress);
-            this.queue_redraw();
-        };
-        timeline.connect('new-frame', apply);
-        timeline.connect('completed', () => {
-            this._stopGenie();
-            onDone?.();
-        });
-        apply();
-        this.opacity = 255;
-        timeline.start();
+        const [ox, oy] = this._origin.get_transformed_position();
+        const [ow, oh] = this._origin.get_transformed_size();
+        this.set_pivot_point(
+            (ox + ow / 2 - this.x) / this.width,
+            (oy + oh - this.y) / this.height);
     }
 
-    // Drops the warp and puts the actor back where it belongs.
-    _stopGenie() {
-        this._genieTimeline?.stop();
-        this._genieTimeline = null;
-        if (this._genie) {
-            this.remove_effect(this._genie);
-            this._genie = null;
+    // The genie, forward to open or backward to close. Height and width move
+    // on separate curves: on the way out the height leads and the width
+    // follows with a soft overshoot, and on the way in the width pinches shut
+    // first.
+    _runGenie(opening, onDone) {
+        this._stopGenie();
+        this._pivotToOrigin();
+
+        if (opening) {
+            this.scale_x = GENIE_START_SCALE;
+            this.scale_y = GENIE_START_SCALE;
+            this.opacity = 0;
+            this.ease({
+                scale_y: 1,
+                duration: GENIE_STRETCH_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            });
+            this.ease({
+                scale_x: 1,
+                delay: GENIE_SPREAD_DELAY_MS,
+                duration: GENIE_SPREAD_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                onComplete: () => onDone?.(),
+            });
+            this.ease({
+                opacity: 255,
+                duration: GENIE_FADE_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        } else {
+            this.ease({
+                scale_x: GENIE_START_SCALE,
+                duration: GENIE_STRETCH_MS * 0.7,
+                mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+            });
+            this.ease({
+                scale_y: GENIE_START_SCALE,
+                delay: GENIE_SPREAD_DELAY_MS,
+                duration: GENIE_STRETCH_MS,
+                mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+                onComplete: () => onDone?.(),
+            });
+            this.ease({
+                opacity: 0,
+                delay: GENIE_STRETCH_MS + GENIE_SPREAD_DELAY_MS - GENIE_FADE_MS,
+                duration: GENIE_FADE_MS,
+                mode: Clutter.AnimationMode.EASE_IN_QUAD,
+            });
         }
-        this.translation_x = 0;
-        this.translation_y = 0;
+    }
+
+    // Ends any genie in progress and puts the transform back.
+    _stopGenie() {
+        this.remove_all_transitions();
+        this.scale_x = 1;
+        this.scale_y = 1;
     }
 
     close() {
