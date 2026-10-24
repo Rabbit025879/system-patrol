@@ -728,16 +728,19 @@ class PatrolHud extends St.BoxLayout {
         Main.layoutManager.addChrome(this, {trackFullscreen: true});
 
         this._userMoved = false;
-        this._centre();
 
         this.opacity = 0;
         if (this._blur?.enabled) {
             // The blur samples the screen behind the HUD, so a HUD that fades
             // in, moves, or is painted before it has been centred blurs the
             // wrong pixels for a frame and flashes. It stays invisible until
-            // _centre has placed it, then appears at once.
+            // _centre has placed it, then appears at once. The flag goes up
+            // before _centre runs, which can finish straight away on a
+            // reopen when the size is already known.
             this._revealOnCentre = true;
+            this._centre();
         } else {
+            this._centre();
             // The slide runs on translation_y, not y, so it cannot fight the
             // centring that _centre does through set_position.
             this.translation_y = -12;
