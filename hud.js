@@ -489,6 +489,15 @@ class PatrolHud extends St.BoxLayout {
         }
     }
 
+    // The backdrop blur reads the pixels behind the HUD, and a redraw that
+    // covers only part of the HUD leaves its previous, tinted frame in the
+    // rest of them, which the blur then picks up as a dark flicker. Queueing
+    // the whole actor widens every redraw to the full box.
+    _invalidate() {
+        if (this._isOpen && this._blur?.enabled)
+            this.queue_redraw();
+    }
+
     // Avatar and machine identity on the left, the mascot on the right: the
     // animation lives here rather than in the top bar, which keeps the panel
     // to a single line of text.
@@ -535,6 +544,7 @@ class PatrolHud extends St.BoxLayout {
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.mascot = new MascotIcon(extensionPath, settings);
+        this.mascot.onFrame = () => this._invalidate();
         mascotBox.add_child(this.mascot);
         mascotBox.add_child(this._buildMascotSwitch(settings));
         header.add_child(mascotBox);
@@ -805,10 +815,12 @@ class PatrolHud extends St.BoxLayout {
     }
 
     setUptime(text) {
+        this._invalidate();
         this._uptimeLabel.text = text;
     }
 
     updateCpu(cpu, {model, temps, freqs, history, capacity, coreIds}) {
+        this._invalidate();
         this._cpuModelLabel.text = model;
         this._graph.setHistory(history, capacity);
 
@@ -862,6 +874,7 @@ class PatrolHud extends St.BoxLayout {
     }
 
     updateMemory(mem) {
+        this._invalidate();
         if (!mem) {
             this._memRow.update({percent: 0, value: 'unavailable'});
             return;
@@ -883,6 +896,7 @@ class PatrolHud extends St.BoxLayout {
     }
 
     updateDisks(disks) {
+        this._invalidate();
         if (this._diskRows.length !== disks.length) {
             for (const row of this._diskRows)
                 row.actor.destroy();
@@ -905,6 +919,7 @@ class PatrolHud extends St.BoxLayout {
     }
 
     updatePower(power) {
+        this._invalidate();
         if (!power) {
             this._powerRow.update({percent: 0, name: 'No battery'});
             this._powerDetail.text = 'Running on mains';
@@ -925,6 +940,7 @@ class PatrolHud extends St.BoxLayout {
     }
 
     updateNetwork(net, link) {
+        this._invalidate();
         const wifi = link?.ssid;
         this._wifiLabel.text = wifi ? `Wi-Fi : ${wifi}` : 'Network : wired / unknown';
         this._rateLabel.text = net.ready
@@ -938,6 +954,7 @@ class PatrolHud extends St.BoxLayout {
     }
 
     updatePublicIp(address) {
+        this._invalidate();
         this._publicIpLabel.text = `Public IP : ${address ?? '—'}`;
     }
 
@@ -946,6 +963,7 @@ class PatrolHud extends St.BoxLayout {
     }
 
     updateGpus(gpus) {
+        this._invalidate();
         if (this._gpuBlocks.length !== gpus.length) {
             for (const block of this._gpuBlocks)
                 block.actor.destroy();

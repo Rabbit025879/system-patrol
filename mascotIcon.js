@@ -177,6 +177,7 @@ class MascotIcon extends St.DrawingArea {
         this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, this._currentInterval, () => {
             this._frameIndex = (this._frameIndex + 1) % FRAME_COUNT;
             this.queue_repaint();
+            this.onFrame?.();
             return GLib.SOURCE_CONTINUE;
         });
     }
