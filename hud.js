@@ -1,5 +1,6 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -19,6 +20,8 @@ const COLOR_VIOLET = '#c678dd';
 const COLOR_TEXT = '#d7dae0';
 const COLOR_MUTED = '#7f8694';
 const COLOR_BG = 'rgba(24, 27, 31, 0.99)';
+const COLOR_GLASS = 'rgba(44, 50, 60, 0.38)';
+const COLOR_GLASS_EDGE = 'rgba(255, 255, 255, 0.38)';
 const COLOR_PANEL = 'rgba(38, 42, 48, 0.75)';
 const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
 const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
@@ -355,10 +358,25 @@ class PatrolHud extends St.BoxLayout {
             reactive: true,
             can_focus: true,
             track_hover: true,
-            style: `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER};` +
-                'border-radius: 18px; padding: 20px 26px 24px 26px;' +
-                'box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);',
+            // Liquid glass: a light tint over a blurred backdrop, a bright
+            // rim, and an inner highlight along the top edge.
+            style: `background-color: ${COLOR_GLASS}; border: 1px solid ${COLOR_GLASS_EDGE};` +
+                'border-radius: 22px; padding: 20px 26px 24px 26px;' +
+                'box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45),' +
+                'inset 0 -1px 0 rgba(255, 255, 255, 0.10),' +
+                '0 10px 30px rgba(0, 0, 0, 0.35);',
         });
+
+        try {
+            this.add_effect_with_name('glass-blur', new Shell.BlurEffect({
+                mode: Shell.BlurMode.BACKGROUND,
+                radius: 40,
+                brightness: 0.85,
+            }));
+        } catch (e) {
+            // No backdrop blur available; the tint alone still reads as glass.
+            console.warn(`System Patrol: blur unavailable: ${e.message}`);
+        }
 
         this._coreRows = [];
         this._diskRows = [];
