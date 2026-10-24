@@ -19,6 +19,9 @@ function sliderFor(settings, key, title, subtitle) {
     scale.set_size_request(220, -1);
     scale.set_draw_value(true);
     scale.set_value_pos(Gtk.PositionType.RIGHT);
+    // A tick under the default, so a tweaked slider can be put back by eye.
+    const fallback = settings.get_default_value(key).get_int32();
+    scale.add_mark(fallback, Gtk.PositionType.BOTTOM, `${fallback}`);
     scale.connect('value-changed', () => settings.set_int(key, Math.round(scale.get_value())));
     row.add_suffix(scale);
     return row;
@@ -56,10 +59,27 @@ export default class SystemPatrolPreferences extends ExtensionPreferences {
             title: 'Glass',
             description: 'The liquid glass look of the HUD. Changes apply live.',
         });
-        glass.add(sliderFor(settings, 'glass-tint', 'Tint', 'Lower is clearer glass'));
-        glass.add(sliderFor(settings, 'glass-blur', 'Blur', 'Set to 0 to turn the blur off'));
-        glass.add(sliderFor(settings, 'glass-brightness', 'Backdrop brightness',
-            'How bright the blurred background is'));
+        const glassOn = new Adw.SwitchRow({
+            title: 'Liquid glass',
+            subtitle: 'Off gives a solid dark panel and skips the blur',
+            active: settings.get_boolean('glass-enabled'),
+        });
+        glassOn.connect('notify::active',
+            () => settings.set_boolean('glass-enabled', glassOn.active));
+        glass.add(glassOn);
+
+        const sliders = [
+            sliderFor(settings, 'glass-tint', 'Tint', 'Lower is clearer glass'),
+            sliderFor(settings, 'glass-blur', 'Blur', 'Set to 0 to turn the blur off'),
+            sliderFor(settings, 'glass-brightness', 'Backdrop brightness',
+                'How bright the blurred background is'),
+        ];
+        sliders.forEach(row => glass.add(row));
+
+        // The sliders mean nothing while the glass is off.
+        const syncSliders = () => sliders.forEach(row => row.set_sensitive(glassOn.active));
+        glassOn.connect('notify::active', syncSliders);
+        syncSliders();
         page.add(glass);
 
         const panel = new Adw.PreferencesGroup({

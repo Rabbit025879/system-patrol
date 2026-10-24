@@ -26,7 +26,7 @@ const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
 const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
 
 // Settings keys that shape the glass; each is an integer percentage.
-const GLASS_KEYS = ['glass-tint', 'glass-blur', 'glass-brightness'];
+const GLASS_KEYS = ['glass-enabled', 'glass-tint', 'glass-blur', 'glass-brightness'];
 
 const GLASS_RADIUS = 22;
 
@@ -442,18 +442,31 @@ class PatrolHud extends St.BoxLayout {
     }
 
     // Liquid glass: a light tint over a blurred backdrop, masked to rounded
-    // corners by the shader.
+    // corners by the shader. With the glass off it is a plain dark panel.
     _applyGlass(settings) {
-        const tint = settings.get_int('glass-tint') / 100;
-        this.style = `background-color: rgba(44, 50, 60, ${tint});` +
-            `border-radius: ${GLASS_RADIUS}px; padding: 20px 26px 24px 26px;`;
+        const glass = settings.get_boolean('glass-enabled');
+
+        if (glass) {
+            const tint = settings.get_int('glass-tint') / 100;
+            this.style = `background-color: rgba(44, 50, 60, ${tint});` +
+                `border-radius: ${GLASS_RADIUS}px; padding: 20px 26px 24px 26px;`;
+        } else {
+            this.style = `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER};` +
+                'border-radius: 18px; padding: 20px 26px 24px 26px;' +
+                'box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);';
+        }
+
+        // The shader would clip the box-shadow, and both effects cost a
+        // GPU pass per frame, so neither runs on the solid panel.
+        if (this._shape)
+            this._shape.enabled = glass;
 
         if (this._blur) {
             const radius = settings.get_int('glass-blur');
             this._blur.radius = radius;
             this._blur.brightness = settings.get_int('glass-brightness') / 100;
             // A zero radius would still pay for the offscreen pass.
-            this._blur.enabled = radius > 0;
+            this._blur.enabled = glass && radius > 0;
         }
     }
 
