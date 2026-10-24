@@ -20,11 +20,12 @@ const COLOR_VIOLET = '#c678dd';
 const COLOR_TEXT = '#d7dae0';
 const COLOR_MUTED = '#7f8694';
 const COLOR_BG = 'rgba(24, 27, 31, 0.99)';
-const COLOR_GLASS = 'rgba(44, 50, 60, 0.38)';
-const COLOR_GLASS_EDGE = 'rgba(255, 255, 255, 0.38)';
 const COLOR_PANEL = 'rgba(38, 42, 48, 0.75)';
 const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
 const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
+
+// Settings keys that shape the glass; each is an integer percentage.
+const GLASS_KEYS = ['glass-tint', 'glass-blur', 'glass-brightness', 'glass-edge'];
 
 const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
@@ -358,25 +359,22 @@ class PatrolHud extends St.BoxLayout {
             reactive: true,
             can_focus: true,
             track_hover: true,
-            // Liquid glass: a light tint over a blurred backdrop, a bright
-            // rim, and an inner highlight along the top edge.
-            style: `background-color: ${COLOR_GLASS}; border: 1px solid ${COLOR_GLASS_EDGE};` +
-                'border-radius: 22px; padding: 20px 26px 24px 26px;' +
-                'box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45),' +
-                'inset 0 -1px 0 rgba(255, 255, 255, 0.10),' +
-                '0 10px 30px rgba(0, 0, 0, 0.35);',
         });
 
+        this._blur = null;
         try {
-            this.add_effect_with_name('glass-blur', new Shell.BlurEffect({
-                mode: Shell.BlurMode.BACKGROUND,
-                radius: 40,
-                brightness: 0.85,
-            }));
+            this._blur = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND});
+            this.add_effect_with_name('glass-blur', this._blur);
         } catch (e) {
             // No backdrop blur available; the tint alone still reads as glass.
             console.warn(`System Patrol: blur unavailable: ${e.message}`);
+            this._blur = null;
         }
+
+        this._applyGlass(settings);
+        const glassIds = GLASS_KEYS.map(
+            key => settings.connect(`changed::${key}`, () => this._applyGlass(settings)));
+        this.connect('destroy', () => glassIds.forEach(id => settings.disconnect(id)));
 
         this._coreRows = [];
         this._diskRows = [];
@@ -434,6 +432,27 @@ class PatrolHud extends St.BoxLayout {
     // Avatar and machine identity on the left, the mascot on the right: the
     // animation lives here rather than in the top bar, which keeps the panel
     // to a single line of text.
+    // Liquid glass: a light tint over a blurred backdrop, a bright rim, and an
+    // inner highlight along the top edge.
+    _applyGlass(settings) {
+        const tint = settings.get_int('glass-tint') / 100;
+        const edge = settings.get_int('glass-edge') / 100;
+        this.style = `background-color: rgba(44, 50, 60, ${tint});` +
+            `border: 1px solid rgba(255, 255, 255, ${edge});` +
+            'border-radius: 22px; padding: 20px 26px 24px 26px;' +
+            `box-shadow: inset 0 1px 0 rgba(255, 255, 255, ${Math.min(1, edge + 0.07)}),` +
+            `inset 0 -1px 0 rgba(255, 255, 255, ${edge / 4}),` +
+            '0 10px 30px rgba(0, 0, 0, 0.35);';
+
+        if (this._blur) {
+            const radius = settings.get_int('glass-blur');
+            this._blur.radius = radius;
+            this._blur.brightness = settings.get_int('glass-brightness') / 100;
+            // A zero radius would still pay for the offscreen pass.
+            this._blur.enabled = radius > 0;
+        }
+    }
+
     _buildHeader(extensionPath, settings) {
         const header = new St.BoxLayout({vertical: false, style: 'spacing: 14px;'});
 
