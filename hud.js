@@ -1,4 +1,5 @@
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -31,6 +32,9 @@ const GLASS_KEYS = ['glass-mode', 'glass-tint', 'glass-blur', 'glass-brightness'
 // chrome actors carrying the popup classes, so this one makes the HUD follow
 // them.
 const SYSTEM_STYLE_CLASS = 'popup-menu-content';
+
+// How long a blurred HUD stays hidden after being placed, in milliseconds.
+const REVEAL_DELAY_MS = 60;
 
 const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
@@ -379,7 +383,11 @@ class PatrolHud extends St.BoxLayout {
         this._applyGlass(settings);
         const glassIds = GLASS_KEYS.map(
             key => settings.connect(`changed::${key}`, () => this._applyGlass(settings)));
-        this.connect('destroy', () => glassIds.forEach(id => settings.disconnect(id)));
+        this.connect('destroy', () => {
+            glassIds.forEach(id => settings.disconnect(id));
+            if (this._revealId)
+                GLib.source_remove(this._revealId);
+        });
 
         this._coreRows = [];
         this._diskRows = [];
@@ -767,7 +775,13 @@ class PatrolHud extends St.BoxLayout {
 
         if (this._revealOnCentre) {
             this._revealOnCentre = false;
-            this.opacity = 255;
+            // The blur needs a few frames after the first paint to pick up
+            // the screen behind it, so the HUD stays hidden a little longer.
+            this._revealId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, REVEAL_DELAY_MS, () => {
+                this._revealId = 0;
+                this.opacity = 255;
+                return GLib.SOURCE_REMOVE;
+            });
         }
     }
 
@@ -781,6 +795,10 @@ class PatrolHud extends St.BoxLayout {
         this.remove_all_transitions();
         this.translation_y = 0;
         this._revealOnCentre = false;
+        if (this._revealId) {
+            GLib.source_remove(this._revealId);
+            this._revealId = 0;
+        }
 
         if (this._backdrop) {
             Main.layoutManager.removeChrome(this._backdrop);
