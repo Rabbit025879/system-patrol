@@ -33,6 +33,12 @@ const GLASS_KEYS = ['glass-mode', 'glass-tint', 'glass-blur', 'glass-brightness'
 // them.
 const SYSTEM_STYLE_CLASS = 'popup-menu-content';
 
+// The HUD pops out of the top bar button it was opened from: it grows from
+// this fraction of its size with a soft overshoot, and shrinks back on close.
+const POP_START_SCALE = 0.55;
+const POP_OPEN_MS = 340;
+const POP_CLOSE_MS = 200;
+
 // How long a blurred HUD stays hidden after being placed, in milliseconds.
 const REVEAL_DELAY_MS = 150;
 
@@ -708,10 +714,14 @@ class PatrolHud extends St.BoxLayout {
         return this._isOpen;
     }
 
-    open() {
+    // origin is the actor the HUD pops out of, normally the top bar button.
+    open(origin = null) {
         if (this._isOpen)
             return;
+        // A close animation still running leaves the HUD on the stage.
+        this._finishClose();
         this._isOpen = true;
+        this._origin = origin;
 
         const monitor = Main.layoutManager.primaryMonitor;
 
@@ -730,25 +740,14 @@ class PatrolHud extends St.BoxLayout {
         this._userMoved = false;
         this._centre();
 
-        if (this._blur?.enabled) {
-            // The blur samples the screen behind the HUD, so a HUD that fades
-            // in or slides, or that is painted before it has been centred,
-            // blurs the wrong pixels for a frame and flashes. It stays
-            // invisible until _centre has placed it, then appears at once.
-            this.opacity = 0;
-            this._revealOnCentre = true;
-        } else {
-            // The slide runs on translation_y, not y, so it cannot fight the
-            // centring that _centre does through set_position.
-            this.opacity = 0;
-            this.translation_y = -12;
-            this.ease({
-                opacity: 255,
-                translation_y: 0,
-                duration: 180,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
-        }
+        // The blur samples the screen behind the HUD, so a HUD that fades in,
+        // moves, or is painted before it has been centred blurs the wrong
+        // pixels for a frame and flashes. With the blur on it stays invisible
+        // until _centre has placed it and then appears at once; without it,
+        // _centre starts the pop animation.
+        this.opacity = 0;
+        this._revealOnCentre = Boolean(this._blur?.enabled);
+        this._popOnCentre = !this._revealOnCentre;
 
         this.grab_key_focus();
     }
@@ -773,6 +772,11 @@ class PatrolHud extends St.BoxLayout {
             monitor.x + Math.floor((monitor.width - width) / 2),
             monitor.y + Math.floor((monitor.height - height) / 2));
 
+        if (this._popOnCentre) {
+            this._popOnCentre = false;
+            this._popOut();
+        }
+
         if (this._revealOnCentre) {
             this._revealOnCentre = false;
             // The blur needs a few frames after the first paint to pick up
@@ -785,28 +789,91 @@ class PatrolHud extends St.BoxLayout {
         }
     }
 
+    // Sets the pivot to where the origin sits relative to the HUD, so scaling
+    // grows and shrinks it toward that point.
+    _pivotToOrigin() {
+        if (!this._origin || this.width <= 0 || this.height <= 0) {
+            this.set_pivot_point(0.5, 0);
+            return;
+        }
+        const [ox, oy] = this._origin.get_transformed_position();
+        const [ow, oh] = this._origin.get_transformed_size();
+        this.set_pivot_point(
+            (ox + ow / 2 - this.x) / this.width,
+            (oy + oh / 2 - this.y) / this.height);
+    }
+
+    _popOut() {
+        this._pivotToOrigin();
+        this.scale_x = POP_START_SCALE;
+        this.scale_y = POP_START_SCALE;
+        this.opacity = 0;
+        this.ease({
+            scale_x: 1,
+            scale_y: 1,
+            duration: POP_OPEN_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_BACK,
+        });
+        // The fade finishes well before the growth settles, so the HUD is
+        // already solid while it overshoots.
+        this.ease({
+            opacity: 255,
+            duration: POP_OPEN_MS / 2,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
     close() {
         if (!this._isOpen)
             return;
         this._isOpen = false;
 
-        // Closing mid-slide would otherwise leave the transition running and
-        // translation_y parked off zero, offsetting the next open.
         this.remove_all_transitions();
-        this.translation_y = 0;
         this._revealOnCentre = false;
+        this._popOnCentre = false;
         if (this._revealId) {
             GLib.source_remove(this._revealId);
             this._revealId = 0;
         }
 
+        // The catcher goes at once so clicks reach what is behind the HUD
+        // while it shrinks away.
         if (this._backdrop) {
             Main.layoutManager.removeChrome(this._backdrop);
             this._backdrop.destroy();
             this._backdrop = null;
         }
-        Main.layoutManager.removeChrome(this);
+
+        // A blurred HUD is hidden and shown without animation (see open).
+        if (this.opacity > 0 && !this._blur?.enabled) {
+            this._closing = true;
+            this._pivotToOrigin();
+            this.ease({
+                scale_x: POP_START_SCALE,
+                scale_y: POP_START_SCALE,
+                opacity: 0,
+                duration: POP_CLOSE_MS,
+                mode: Clutter.AnimationMode.EASE_IN_QUAD,
+                onComplete: () => this._finishClose(),
+            });
+        } else {
+            this._finishClose();
+        }
         this.emit('closed');
+    }
+
+    // Takes the HUD off the stage and puts its transform back, ending a close
+    // animation early if one is still running.
+    _finishClose() {
+        if (!this._closing && this.get_parent() === null)
+            return;
+        this._closing = false;
+        this.remove_all_transitions();
+        this.scale_x = 1;
+        this.scale_y = 1;
+        this.opacity = 255;
+        if (this.get_parent() !== null)
+            Main.layoutManager.removeChrome(this);
     }
 
     toggle() {
