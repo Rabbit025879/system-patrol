@@ -34,7 +34,7 @@ const GLASS_KEYS = ['glass-mode', 'glass-tint', 'glass-blur', 'glass-brightness'
 const SYSTEM_STYLE_CLASS = 'popup-menu-content';
 
 // How long a blurred HUD stays hidden after being placed, in milliseconds.
-const REVEAL_DELAY_MS = 60;
+const REVEAL_DELAY_MS = 150;
 
 const WARNING_PERCENT = 75;
 const CRITICAL_PERCENT = 90;
