@@ -60,7 +60,6 @@ export default class SystemPatrolPreferences extends ExtensionPreferences {
         glass.add(sliderFor(settings, 'glass-blur', 'Blur', 'Set to 0 to turn the blur off'));
         glass.add(sliderFor(settings, 'glass-brightness', 'Backdrop brightness',
             'How bright the blurred background is'));
-        glass.add(sliderFor(settings, 'glass-edge', 'Edge highlight', 'The bright rim and top shine'));
         page.add(glass);
 
         const panel = new Adw.PreferencesGroup({

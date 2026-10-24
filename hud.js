@@ -26,7 +26,7 @@ const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
 const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
 
 // Settings keys that shape the glass; each is an integer percentage.
-const GLASS_KEYS = ['glass-tint', 'glass-blur', 'glass-brightness', 'glass-edge'];
+const GLASS_KEYS = ['glass-tint', 'glass-blur', 'glass-brightness'];
 
 const GLASS_RADIUS = 22;
 
@@ -364,17 +364,6 @@ class PatrolHud extends St.BoxLayout {
             track_hover: true,
         });
 
-        // The first effect added is the outermost one, applied last, so the
-        // rounded mask goes on before the blur to be able to cut its corners.
-        this._shape = null;
-        try {
-            this._shape = new GlassEffect({radius: GLASS_RADIUS});
-            this.add_effect_with_name('glass-shape', this._shape);
-        } catch (e) {
-            console.warn(`System Patrol: glass shader unavailable: ${e.message}`);
-            this._shape = null;
-        }
-
         this._blur = null;
         try {
             this._blur = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND});
@@ -383,6 +372,15 @@ class PatrolHud extends St.BoxLayout {
             // No backdrop blur available; the tint alone still reads as glass.
             console.warn(`System Patrol: blur unavailable: ${e.message}`);
             this._blur = null;
+        }
+
+        this._shape = null;
+        try {
+            this._shape = new GlassEffect({radius: GLASS_RADIUS});
+            this.add_effect_with_name('glass-shape', this._shape);
+        } catch (e) {
+            console.warn(`System Patrol: glass shader unavailable: ${e.message}`);
+            this._shape = null;
         }
 
         this._applyGlass(settings);
@@ -443,17 +441,12 @@ class PatrolHud extends St.BoxLayout {
         });
     }
 
-    // Liquid glass: a light tint over a blurred backdrop. The shader draws the
-    // rounded mask and the lit rim; the CSS rim is only the fallback without it.
+    // Liquid glass: a light tint over a blurred backdrop, masked to rounded
+    // corners by the shader.
     _applyGlass(settings) {
         const tint = settings.get_int('glass-tint') / 100;
-        const edge = settings.get_int('glass-edge') / 100;
         this.style = `background-color: rgba(44, 50, 60, ${tint});` +
-            `border-radius: ${GLASS_RADIUS}px; padding: 20px 26px 24px 26px;` +
-            (this._shape ? '' : `border: 1px solid rgba(255, 255, 255, ${edge});`);
-
-        if (this._shape)
-            this._shape.edge = edge;
+            `border-radius: ${GLASS_RADIUS}px; padding: 20px 26px 24px 26px;`;
 
         if (this._blur) {
             const radius = settings.get_int('glass-blur');
