@@ -7,6 +7,9 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 const MASCOT_KEYS = ['cat', 'raccoon'];
 const MASCOT_LABELS = ['Cat', 'Raccoon'];
 
+const ENGINE_KEYS = ['builtin', 'blur-my-shell'];
+const ENGINE_LABELS = ['Built-in', 'Blur My Shell'];
+
 const PANEL_KEYS = ['greeting', 'activity', 'stats', 'custom'];
 const PANEL_LABELS = ['Greetings', 'Activity', 'CPU / RAM figures', 'Custom text'];
 
@@ -68,18 +71,33 @@ export default class SystemPatrolPreferences extends ExtensionPreferences {
             () => settings.set_boolean('glass-enabled', glassOn.active));
         glass.add(glassOn);
 
-        const sliders = [
-            sliderFor(settings, 'glass-tint', 'Tint', 'Lower is clearer glass'),
+        const engine = comboFor(settings, 'glass-engine', ENGINE_KEYS, ENGINE_LABELS,
+            'Blur provider',
+            'Blur My Shell blurs the HUD like a popup menu, with its own pipeline and ' +
+            'corner radius. Needs it installed and enabled; applies the next time the HUD opens');
+        glass.add(engine);
+
+        const tint = sliderFor(settings, 'glass-tint', 'Tint', 'Lower is clearer glass');
+        const builtinOnly = [
             sliderFor(settings, 'glass-blur', 'Blur', 'Set to 0 to turn the blur off'),
             sliderFor(settings, 'glass-brightness', 'Backdrop brightness',
                 'How bright the blurred background is'),
         ];
-        sliders.forEach(row => glass.add(row));
+        glass.add(tint);
+        builtinOnly.forEach(row => glass.add(row));
 
-        // The sliders mean nothing while the glass is off.
-        const syncSliders = () => sliders.forEach(row => row.set_sensitive(glassOn.active));
-        glassOn.connect('notify::active', syncSliders);
-        syncSliders();
+        // Controls mean nothing while the glass is off, and the blur ones
+        // are Blur My Shell's to set when it provides the blur.
+        const syncControls = () => {
+            const on = glassOn.active;
+            const own = settings.get_string('glass-engine') === 'builtin';
+            engine.set_sensitive(on);
+            tint.set_sensitive(on);
+            builtinOnly.forEach(row => row.set_sensitive(on && own));
+        };
+        glassOn.connect('notify::active', syncControls);
+        engine.connect('notify::selected', syncControls);
+        syncControls();
         page.add(glass);
 
         const panel = new Adw.PreferencesGroup({
