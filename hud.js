@@ -33,16 +33,6 @@ const GLASS_KEYS = ['glass-mode', 'glass-tint', 'glass-blur', 'glass-brightness'
 // them.
 const SYSTEM_STYLE_CLASS = 'popup-menu-content';
 
-// The HUD comes out of the top bar button like a genie from a bottle: a thin
-// sliver stretches down from the button, then spreads sideways to full width,
-// and the close plays it in reverse. It only uses scale, so a blur extension
-// that follows the HUD's transformed size, such as Blur My Shell, stays in step.
-const GENIE_START_SCALE = 0.05;
-const GENIE_STRETCH_MS = 320;
-const GENIE_SPREAD_MS = 420;
-const GENIE_SPREAD_DELAY_MS = 90;
-const GENIE_FADE_MS = 120;
-
 // How long a blurred HUD stays hidden after being placed, in milliseconds.
 const REVEAL_DELAY_MS = 150;
 
@@ -718,14 +708,10 @@ class PatrolHud extends St.BoxLayout {
         return this._isOpen;
     }
 
-    // origin is the actor the HUD pops out of, normally the top bar button.
-    open(origin = null) {
+    open() {
         if (this._isOpen)
             return;
-        // A close animation still running leaves the HUD on the stage.
-        this._finishClose();
         this._isOpen = true;
-        this._origin = origin;
 
         const monitor = Main.layoutManager.primaryMonitor;
 
@@ -744,14 +730,24 @@ class PatrolHud extends St.BoxLayout {
         this._userMoved = false;
         this._centre();
 
-        // The blur samples the screen behind the HUD, so a HUD that fades in,
-        // moves, or is painted before it has been centred blurs the wrong
-        // pixels for a frame and flashes. With the blur on it stays invisible
-        // until _centre has placed it and then appears at once; without it,
-        // _centre starts the pop animation.
         this.opacity = 0;
-        this._revealOnCentre = Boolean(this._blur?.enabled);
-        this._popOnCentre = !this._revealOnCentre;
+        if (this._blur?.enabled) {
+            // The blur samples the screen behind the HUD, so a HUD that fades
+            // in, moves, or is painted before it has been centred blurs the
+            // wrong pixels for a frame and flashes. It stays invisible until
+            // _centre has placed it, then appears at once.
+            this._revealOnCentre = true;
+        } else {
+            // The slide runs on translation_y, not y, so it cannot fight the
+            // centring that _centre does through set_position.
+            this.translation_y = -12;
+            this.ease({
+                opacity: 255,
+                translation_y: 0,
+                duration: 180,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        }
 
         this.grab_key_focus();
     }
@@ -776,11 +772,6 @@ class PatrolHud extends St.BoxLayout {
             monitor.x + Math.floor((monitor.width - width) / 2),
             monitor.y + Math.floor((monitor.height - height) / 2));
 
-        if (this._popOnCentre) {
-            this._popOnCentre = false;
-            this._runGenie(true);
-        }
-
         if (this._revealOnCentre) {
             this._revealOnCentre = false;
             // The blur needs a few frames after the first paint to pick up
@@ -793,121 +784,28 @@ class PatrolHud extends St.BoxLayout {
         }
     }
 
-    // Scales about the button the HUD comes out of, so every point of it
-    // converges on the button as the scale shrinks.
-    _pivotToOrigin() {
-        if (!this._origin || this.width <= 0 || this.height <= 0) {
-            this.set_pivot_point(0.5, 0);
-            return;
-        }
-        const [ox, oy] = this._origin.get_transformed_position();
-        const [ow, oh] = this._origin.get_transformed_size();
-        this.set_pivot_point(
-            (ox + ow / 2 - this.x) / this.width,
-            (oy + oh - this.y) / this.height);
-    }
-
-    // The genie, forward to open or backward to close. Height and width move
-    // on separate curves: on the way out the height leads and the width
-    // follows with a soft overshoot, and on the way in the width pinches shut
-    // first.
-    _runGenie(opening, onDone) {
-        this._stopGenie();
-        this._pivotToOrigin();
-
-        if (opening) {
-            this.scale_x = GENIE_START_SCALE;
-            this.scale_y = GENIE_START_SCALE;
-            this.opacity = 0;
-            this.ease({
-                scale_y: 1,
-                duration: GENIE_STRETCH_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-            });
-            this.ease({
-                scale_x: 1,
-                delay: GENIE_SPREAD_DELAY_MS,
-                duration: GENIE_SPREAD_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_BACK,
-                onComplete: () => onDone?.(),
-            });
-            this.ease({
-                opacity: 255,
-                duration: GENIE_FADE_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
-        } else {
-            this.ease({
-                scale_x: GENIE_START_SCALE,
-                duration: GENIE_STRETCH_MS * 0.7,
-                mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-            });
-            this.ease({
-                scale_y: GENIE_START_SCALE,
-                delay: GENIE_SPREAD_DELAY_MS,
-                duration: GENIE_STRETCH_MS,
-                mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-                onComplete: () => onDone?.(),
-            });
-            this.ease({
-                opacity: 0,
-                delay: GENIE_STRETCH_MS + GENIE_SPREAD_DELAY_MS - GENIE_FADE_MS,
-                duration: GENIE_FADE_MS,
-                mode: Clutter.AnimationMode.EASE_IN_QUAD,
-            });
-        }
-    }
-
-    // Ends any genie in progress and puts the transform back.
-    _stopGenie() {
-        this.remove_all_transitions();
-        this.scale_x = 1;
-        this.scale_y = 1;
-    }
-
     close() {
         if (!this._isOpen)
             return;
         this._isOpen = false;
 
-        this._stopGenie();
+        // Closing mid-slide would otherwise leave the transition running and
+        // translation_y parked off zero, offsetting the next open.
         this.remove_all_transitions();
+        this.translation_y = 0;
         this._revealOnCentre = false;
-        this._popOnCentre = false;
         if (this._revealId) {
             GLib.source_remove(this._revealId);
             this._revealId = 0;
         }
 
-        // The catcher goes at once so clicks reach what is behind the HUD
-        // while it shrinks away.
         if (this._backdrop) {
             Main.layoutManager.removeChrome(this._backdrop);
             this._backdrop.destroy();
             this._backdrop = null;
         }
-
-        // A blurred HUD is hidden and shown without animation (see open).
-        if (this.opacity > 0 && !this._blur?.enabled) {
-            this._closing = true;
-            this._runGenie(false, () => this._finishClose());
-        } else {
-            this._finishClose();
-        }
+        Main.layoutManager.removeChrome(this);
         this.emit('closed');
-    }
-
-    // Takes the HUD off the stage and puts its transform back, ending a close
-    // animation early if one is still running.
-    _finishClose() {
-        if (!this._closing && this.get_parent() === null)
-            return;
-        this._closing = false;
-        this._stopGenie();
-        this.remove_all_transitions();
-        this.opacity = 255;
-        if (this.get_parent() !== null)
-            Main.layoutManager.removeChrome(this);
     }
 
     toggle() {
