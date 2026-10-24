@@ -18,8 +18,8 @@ const COLOR_WARNING = '#e5c07b';
 const COLOR_CRITICAL = '#e06c75';
 const COLOR_ACCENT = '#61afef';
 const COLOR_VIOLET = '#c678dd';
-const COLOR_TEXT = '#d7dae0';
-const COLOR_MUTED = '#7f8694';
+const COLOR_TEXT = '#eef0f4';
+const COLOR_MUTED = '#b0b8c5';
 const COLOR_BG = 'rgba(24, 27, 31, 0.99)';
 const COLOR_PANEL = 'rgba(38, 42, 48, 0.75)';
 const COLOR_BORDER = 'rgba(122, 134, 148, 0.35)';
@@ -465,12 +465,15 @@ class PatrolHud extends St.BoxLayout {
             this.remove_style_class_name(SYSTEM_STYLE_CLASS);
 
         const padding = 'padding: 20px 26px 24px 26px;';
+        // The panel can be nearly transparent over a bright background, so the
+        // text gets a soft dark halo, which the labels inherit.
+        const halo = 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);';
         if (system) {
             // Background, border, radius and shadow all come from the theme.
-            this.style = padding;
+            this.style = `${padding} ${halo}`;
         } else if (glass) {
             const tint = settings.get_int('glass-tint') / 100;
-            this.style = `background-color: rgba(44, 50, 60, ${tint}); ${padding}`;
+            this.style = `background-color: rgba(44, 50, 60, ${tint}); ${padding} ${halo}`;
         } else {
             this.style = `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER};` +
                 `border-radius: 18px; ${padding}` +
