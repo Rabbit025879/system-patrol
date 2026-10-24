@@ -42,9 +42,9 @@
       <description>Draws the HUD as translucent blurred glass. Off gives a solid dark panel.</description>
     </key>
     <key name="glass-engine" enum="org.gnome.shell.extensions.system-patrol.glassengine">
-      <default>'builtin'</default>
+      <default>'blur-my-shell'</default>
       <summary>Glass blur provider</summary>
-      <description>Use this extension's own blur, or let Blur My Shell blur the HUD like a popup menu. Falls back to the built-in blur when Blur My Shell is not running.</description>
+      <description>Let Blur My Shell blur the HUD like a popup menu, so it follows its popup settings, or use this extension's own blur. Falls back to the built-in blur when Blur My Shell is not running.</description>
     </key>
     <key name="glass-tint" type="i">
       <range min="0" max="100"/>

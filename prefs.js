@@ -7,6 +7,7 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 const MASCOT_KEYS = ['cat', 'raccoon'];
 const MASCOT_LABELS = ['Cat', 'Raccoon'];
 
+// Index order has to match the enum nicks in the gschema.
 const ENGINE_KEYS = ['builtin', 'blur-my-shell'];
 const ENGINE_LABELS = ['Built-in', 'Blur My Shell'];
 
@@ -21,7 +22,8 @@ function sliderFor(settings, key, title, subtitle) {
     scale.set_valign(Gtk.Align.CENTER);
     scale.set_size_request(220, -1);
     scale.set_draw_value(true);
-    scale.set_value_pos(Gtk.PositionType.RIGHT);
+    // Above the track, so the default marker below it cannot cover the value.
+    scale.set_value_pos(Gtk.PositionType.TOP);
     // A tick under the default, so a tweaked slider can be put back by eye.
     const fallback = settings.get_default_value(key).get_int32();
     scale.add_mark(fallback, Gtk.PositionType.BOTTOM, `${fallback}`);
@@ -73,8 +75,8 @@ export default class SystemPatrolPreferences extends ExtensionPreferences {
 
         const engine = comboFor(settings, 'glass-engine', ENGINE_KEYS, ENGINE_LABELS,
             'Blur provider',
-            'Blur My Shell blurs the HUD like a popup menu, with its own pipeline and ' +
-            'corner radius. Needs it installed and enabled; applies the next time the HUD opens');
+            'Blur My Shell follows its popup settings; Built-in uses the sliders below. ' +
+            'Blur My Shell needs to be enabled, and applies the next time the HUD opens');
         glass.add(engine);
 
         const tint = sliderFor(settings, 'glass-tint', 'Tint', 'Lower is clearer glass');
