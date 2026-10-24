@@ -364,6 +364,17 @@ class PatrolHud extends St.BoxLayout {
             track_hover: true,
         });
 
+        // The first effect added is the outermost one, applied last, so the
+        // rounded mask goes on before the blur to be able to cut its corners.
+        this._shape = null;
+        try {
+            this._shape = new GlassEffect({radius: GLASS_RADIUS});
+            this.add_effect_with_name('glass-shape', this._shape);
+        } catch (e) {
+            console.warn(`System Patrol: glass shader unavailable: ${e.message}`);
+            this._shape = null;
+        }
+
         this._blur = null;
         try {
             this._blur = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND});
@@ -372,15 +383,6 @@ class PatrolHud extends St.BoxLayout {
             // No backdrop blur available; the tint alone still reads as glass.
             console.warn(`System Patrol: blur unavailable: ${e.message}`);
             this._blur = null;
-        }
-
-        this._shape = null;
-        try {
-            this._shape = new GlassEffect({radius: GLASS_RADIUS});
-            this.add_effect_with_name('glass-shape', this._shape);
-        } catch (e) {
-            console.warn(`System Patrol: glass shader unavailable: ${e.message}`);
-            this._shape = null;
         }
 
         this._applyGlass(settings);
