@@ -32,5 +32,29 @@
       <summary>Show public IP</summary>
       <description>Fetches the public address from api.ipify.org. This is the only part of the HUD that leaves the machine.</description>
     </key>
+    <key name="glass-tint" type="i">
+      <range min="0" max="100"/>
+      <default>38</default>
+      <summary>Glass tint</summary>
+      <description>How strong the dark tint behind the HUD is, in percent. Lower is clearer glass.</description>
+    </key>
+    <key name="glass-blur" type="i">
+      <range min="0" max="100"/>
+      <default>40</default>
+      <summary>Glass blur</summary>
+      <description>How much the desktop behind the HUD is blurred. 0 turns the blur off.</description>
+    </key>
+    <key name="glass-brightness" type="i">
+      <range min="0" max="100"/>
+      <default>85</default>
+      <summary>Glass brightness</summary>
+      <description>Brightness of the blurred backdrop, in percent.</description>
+    </key>
+    <key name="glass-edge" type="i">
+      <range min="0" max="100"/>
+      <default>38</default>
+      <summary>Glass edge</summary>
+      <description>Opacity of the bright rim around the HUD, in percent.</description>
+    </key>
   </schema>
 </schemalist>
