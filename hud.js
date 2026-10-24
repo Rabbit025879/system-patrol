@@ -5,7 +5,6 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {GlassEffect} from './glassEffect.js';
 import {MascotIcon} from './mascotIcon.js';
 
 // NOTE: this extension targets GNOME Shell 46, where St.BoxLayout takes a
@@ -27,8 +26,6 @@ const COLOR_TRACK = 'rgba(122, 134, 148, 0.30)';
 
 // Settings keys that shape the glass; each is an integer percentage.
 const GLASS_KEYS = ['glass-mode', 'glass-tint', 'glass-blur', 'glass-brightness'];
-
-const GLASS_RADIUS = 22;
 
 // Shell themes, and blur extensions such as Blur My Shell, style and blur
 // chrome actors carrying the popup classes, so this one makes the HUD follow
@@ -379,15 +376,6 @@ class PatrolHud extends St.BoxLayout {
             this._blur = null;
         }
 
-        this._shape = null;
-        try {
-            this._shape = new GlassEffect({radius: GLASS_RADIUS});
-            this.add_effect_with_name('glass-shape', this._shape);
-        } catch (e) {
-            console.warn(`System Patrol: glass shader unavailable: ${e.message}`);
-            this._shape = null;
-        }
-
         this._applyGlass(settings);
         const glassIds = GLASS_KEYS.map(
             key => settings.connect(`changed::${key}`, () => this._applyGlass(settings)));
@@ -446,8 +434,9 @@ class PatrolHud extends St.BoxLayout {
         });
     }
 
-    // Liquid glass: a light tint over a blurred backdrop, masked to rounded
-    // corners by the shader. With the glass off it is a plain dark panel.
+    // Liquid glass: a light tint over a blurred backdrop. The blur always
+    // fills the actor's whole rectangle and cannot follow a rounded corner, so
+    // the glass is square to keep the tint and the blur lined up.
     _applyGlass(settings) {
         const mode = settings.get_string('glass-mode');
         const system = mode === 'system';
@@ -467,19 +456,14 @@ class PatrolHud extends St.BoxLayout {
             this.style = padding;
         } else if (glass) {
             const tint = settings.get_int('glass-tint') / 100;
-            this.style = `background-color: rgba(44, 50, 60, ${tint});` +
-                `border-radius: ${GLASS_RADIUS}px; ${padding}`;
+            this.style = `background-color: rgba(44, 50, 60, ${tint}); ${padding}`;
         } else {
             this.style = `background-color: ${COLOR_BG}; border: 1px solid ${COLOR_BORDER};` +
                 `border-radius: 18px; ${padding}` +
                 'box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);';
         }
 
-        // The shader would clip the box-shadow, and both effects cost a
-        // GPU pass per frame, so they only run for the built-in glass.
-        if (this._shape)
-            this._shape.enabled = glass;
-
+        // The blur costs a GPU pass per frame, so it only runs for the glass.
         if (this._blur) {
             const radius = settings.get_int('glass-blur');
             this._blur.radius = radius;
