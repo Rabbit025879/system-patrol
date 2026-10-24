@@ -31,11 +31,16 @@ export const GlassEffect = GObject.registerClass({
     },
 }, class GlassEffect extends Shell.GLSLEffect {
     vfunc_build_pipeline() {
+        console.log('System Patrol: glass shader pipeline built');
         this.add_glsl_snippet(Shell.SnippetHook.FRAGMENT, DECLARATIONS, CODE, true);
     }
 
     vfunc_paint_target(node, paintContext) {
         const actor = this.get_actor();
+        if (!this._logged) {
+            this._logged = true;
+            console.log(`System Patrol: glass shader paint ${actor.width}x${actor.height} r=${this.radius} enabled=${this.enabled}`);
+        }
         const uniforms = {
             radius: this.radius,
             width: actor.width,
